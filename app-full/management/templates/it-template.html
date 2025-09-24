@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URGENT - Mise à jour sécurité requise</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+        
+        .email-container {
+            max-width: 650px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1f2937, #374151);
+            color: white;
+            padding: 25px 35px;
+            position: relative;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #f59e0b, #d97706, #b45309);
+        }
+        
+        .company-logo {
+            display: flex;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .company-logo::before {
+            content: '🖥️';
+            margin-right: 10px;
+            font-size: 28px;
+        }
+        
+        .header-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+            color: #d1d5db;
+        }
+        
+        .content {
+            padding: 35px;
+        }
+        
+        .priority-banner {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+            padding: 20px;
+            margin: -35px -35px 30px -35px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .priority-banner::before {
+            content: '🚨';
+            margin-right: 10px;
+            font-size: 18px;
+        }
+        
+        .security-alert {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+            position: relative;
+        }
+        
+        .security-alert::before {
+            content: '⚠️';
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: #fef3c7;
+            padding: 0 10px;
+            font-size: 20px;
+        }
+        
+        .alert-title {
+            color: #92400e;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        
+        .vulnerability-info {
+            background: #f3f4f6;
+            border-left: 4px solid #6366f1;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .vulnerability-title {
+            color: #4338ca;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .cta-container {
+            text-align: center;
+            margin: 35px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white !important;
+            padding: 16px 32px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(220,38,38,0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .cta-button::before {
+            content: '🔒';
+            margin-right: 8px;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(220,38,38,0.4);
+        }
+        
+        .countdown {
+            background: #fee2e2;
+            border: 2px dashed #dc2626;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 25px 0;
+        }
+        
+        .countdown-timer {
+            font-size: 32px;
+            font-weight: bold;
+            color: #dc2626;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+        
+        .steps-list {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .steps-list h4 {
+            color: #047857;
+            margin-bottom: 15px;
+        }
+        
+        .steps-list ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .steps-list li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+        
+        .tech-details {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .footer {
+            background: #1f2937;
+            color: #d1d5db;
+            padding: 30px 35px;
+            font-size: 14px;
+        }
+        
+        .footer-section {
+            margin-bottom: 20px;
+        }
+        
+        .footer-title {
+            color: white;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .contact-info {
+            background: #374151;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .warning-text {
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 0;
+                border-radius: 0;
+            }
+            
+            .content, .header, .footer {
+                padding: 20px;
+            }
+            
+            .priority-banner {
+                margin: -20px -20px 20px -20px;
+            }
+            
+            .countdown-timer {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="company-logo">IT Security Center</div>
+            <div class="header-subtitle">Département Sécurité Informatique</div>
+        </div>
+        
+        <!-- Priority Banner -->
+        <div class="priority-banner">
+            PRIORITÉ CRITIQUE - ACTION IMMÉDIATE REQUISE
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <h2 style="color: #1f2937; margin-bottom: 20px;">Mise à Jour de Sécurité Critique</h2>
+            
+            <p>Bonjour,</p>
+            
+            <div class="security-alert">
+                <div class="alert-title">Vulnérabilité Critique Détectée</div>
+                <p>
+                    Notre équipe de sécurité a identifié une <strong>faille de sécurité majeure</strong> 
+                    affectant votre poste de travail. Cette vulnérabilité expose notre réseau d'entreprise 
+                    à des risques d'intrusion imminents.
+                </p>
+            </div>
+            
+            <div class="vulnerability-info">
+                <div class="vulnerability-title">📋 Détails Techniques :</div>
+                <div class="tech-details">
+                    CVE-2024-CRITICAL: Remote Code Execution<br>
+                    Severity: 9.8/10 (CRITICAL)<br>
+                    Status: EXPLOITATION ACTIVE DÉTECTÉE<br>
+                    Systems Affected: Windows/Office Suite<br>
+                    First Seen: Il y a 6 heures
+                </div>
+            </div>
+            
+            <div class="countdown">
+                <p style="margin: 0; font-weight: bold; color: #dc2626;">
+                    ⏰ TEMPS RESTANT POUR LA MISE À JOUR
+                </p>
+                <div class="countdown-timer">02:47:33</div>
+                <p style="margin: 0; font-size: 14px;">
+                    Après ce délai, votre accès réseau sera automatiquement suspendu
+                </p>
+            </div>
+            
+            <div class="steps-list">
+                <h4>🛠️ Procédure de Mise à Jour (5 minutes) :</h4>
+                <ol>
+                    <li><strong>Cliquez</strong> sur le bouton de mise à jour ci-dessous</li>
+                    <li><strong>Confirmez</strong> votre identité avec vos identifiants réseau</li>
+                    <li><strong>Autorisez</strong> l'installation automatique du correctif</li>
+                    <li><strong>Redémarrez</strong> votre ordinateur à la fin du processus</li>
+                </ol>
+            </div>
+            
+            <div class="cta-container">
+                <p style="margin-bottom: 20px; font-weight: 600; color: #374151;">
+                    Installation automatique du correctif de sécurité :
+                </p>
+                <a href="{TRACKING_URL}" class="cta-button">
+                    Installer la Mise à Jour Maintenant
+                </a>
+                <p style="margin-top: 15px; font-size: 12px; color: #6b7280;">
+                    ✅ Approuvé par le RSSI | 🔐 Installation sécurisée | ⚡ Processus automatisé
+                </p>
+            </div>
+            
+            <div class="warning-text">
+                ⚠️ ATTENTION : Le non-respect de cette procédure dans les délais impartis 
+                entraînera une suspension immédiate de vos accès réseau conformément à la 
+                politique de sécurité de l'entreprise.
+            </div>
+            
+            <p style="margin-top: 25px; font-style: italic; color: #6b7280;">
+                Cette notification a été générée automatiquement par notre système de surveillance 
+                de la sécurité. En cas de problème technique, contactez immédiatement le support IT.
+            </p>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-section">
+                <div class="footer-title">IT Security Center</div>
+                <p>Département Sécurité Informatique - Votre Entreprise</p>
+            </div>
+            
+            <div class="footer-section">
+                <p style="font-size: 12px; opacity: 0.8; margin-top: 20px;">
+                    Ce message est envoyé dans le cadre des procédures de sécurité informatique.<br>
+                    ID Incident: SEC-2024-CRIT-001847 | Classification: CONFIDENTIEL
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
