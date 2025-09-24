@@ -1,0 +1,40 @@
+{
+  "name": "phishguard-basic",
+  "version": "1.0.0",
+  "description": "Plateforme complète de simulation de phishing pour la formation en cybersécurité",
+  "author": "Reaper Official",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://github.com/Reaper-Official/phishguard-basic#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Reaper-Official/phishguard-basic.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Reaper-Official/phishguard-basic/issues"
+  },
+  "keywords": [
+    "cybersecurity",
+    "phishing",
+    "training",
+    "education",
+    "security-awareness",
+    "self-hosted",
+    "docker",
+    "php",
+    "postgresql"
+  ],
+  "scripts": {
+    "install": "chmod +x install.sh && ./install.sh",
+    "start": "docker-compose up -d",
+    "stop": "docker-compose down",
+    "restart": "docker-compose restart",
+    "logs": "docker-compose logs -f",
+    "logs-app": "docker-compose logs -f app",
+    "logs-db": "docker-compose logs -f db",
+    "logs-nginx": "docker-compose logs -f nginx",
+    "status": "docker-compose ps",
+    "setup": "docker-compose exec app php setup.php",
+    "shell": "docker-compose exec app sh",
+    "db-shell": "docker-compose exec db psql -U phishguard phishguard_basic",
+    "backup": "mkdir -p storage/backups && docker-compose exec db pg_dump -U phishguard phishguard_basic > storage/backups/backup-$(date +%Y%m%d-%H%M%S).sql",
+    "restore": "docker-compose exec -T db psql
