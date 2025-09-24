@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # Base de données PostgreSQL
+  db:
+    image: postgres:14-alpine
+    container_name: phishguard_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-phishguard_basic}
+      POSTGRES_USER: ${DB_USER:-phishguard}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./app-full/management/config/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - phishguard_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-phishguard}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Cache Redis
+  redis:
+    image: redis:7-alpine
+    container_name: phishguard_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - phishguard_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Application PHP-FPM
+  app:
+    build: .
+    container_name: phishguard_app
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_NAME: ${DB_NAME:-phishguard_basic}
+      DB_USER: ${DB_USER:-phishguard}
+      DB_PASSWORD: ${DB_PASSWORD:-secure_password}
+      REDIS_HOST: redis
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    volumes:
+      - ./app-full:/var/www/html
+      - ./storage:/var/www/html/storage
+      - ./logs:/var/log/phishguard
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - phishguard_network
+
+  # Serveur web Nginx
+  nginx:
+    image: nginx:alpine
+    container_name: phishguard_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/sites-available:/etc/nginx/conf.d
+      - ./ssl:/etc/ssl/phishguard
+      - ./app-full:/var/www/html
+      - ./storage/logs/nginx:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - phishguard_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  phishguard_network:
+    driver: bridge
