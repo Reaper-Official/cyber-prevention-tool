@@ -1,348 +1,5 @@
 #!/bin/bash
-# install.sh - Statut: systemctl status phishguard
-
-COMMANDES DOCKER UTILES:
-========================
-cd $INSTALL_DIR
-sudo -u $SERVICE_USER docker-compose logs -f      # Voir tous les logs
-sudo -u $SERVICE_USER docker-compose logs app     # Logs de l'application
-sudo -u $SERVICE_USER docker-compose ps           # Statut des conteneurs
-sudo -u $SERVICE_USER docker-compose restart      # Redémarrage complet
-sudo -u $SERVICE_USER docker-compose down         # Arrêt complet
-sudo -u $SERVICE_USER docker-compose up -d        # Démarrage
-
-SÉCURITÉ:
-=========
-🔥 Firewall: Configuré (ports 80, 443, 22)
-🛡️  Fail2Ban: $(command -v fail2ban-server &>/dev/null && echo "Configuré" || echo "Non installé")
-🔐 Utilisateur système: $SERVICE_USER (non-login)
-🔒 Permissions: Configurées selon les bonnes pratiques
-
-PROCHAINES ÉTAPES:
-==================
-1. 🔑 Changez le mot de passe administrateur par défaut
-2. 📧 Configurez votre serveur SMTP dans le fichier .env
-3. 🔒 Configurez SSL/TLS pour HTTPS (Let's Encrypt recommandé)
-4. 👥 Importez votre liste d'employés
-5. 📧 Créez votre première campagne de test
-6. 🔧 Utilisez le configurateur: ./configurator.sh
-
-RESSOURCES UTILES:
-==================
-📁 Fichiers de configuration: $INSTALL_DIR/nginx/
-📊 Logs de l'application: $INSTALL_DIR/storage/logs/
-💾 Sauvegardes: $INSTALL_DIR/storage/backups/
-🔧 Configuration avancée: $INSTALL_DIR/configurator.sh
-
-SUPPORT ET DOCUMENTATION:
-=========================
-📧 Support: reaper@etik.com
-🐛 Issues GitHub: https://github.com/Reaper-Official/cyber-prevention-tool/issues
-📖 Documentation: README.md dans le répertoire d'installation
-
-COMMANDES DE MAINTENANCE:
-========================
-# Sauvegarde de la base de données
-sudo -u $SERVICE_USER docker-compose exec db pg_dump -U phishguard phishguard_basic > backup_\$(date +%Y%m%d).sql
-
-# Mise à jour depuis GitHub
-cd $INSTALL_DIR && git pull && sudo -u $SERVICE_USER docker-compose build --no-cache && sudo -u $SERVICE_USER docker-compose up -d
-
-# Nettoyage des logs anciens
-find $INSTALL_DIR/storage/logs -name "*.log" -mtime +30 -delete
-
-NOTES IMPORTANTES:
-==================
-- Ce rapport contient des informations sensibles
-- Gardez vos identifiants de connexion sécurisés
-- Effectuez des sauvegardes régulières
-- Surveillez les logs pour détecter des anomalies
-
-Installation terminée avec succès le $(date)
-EOF
-
-    chown "$SERVICE_USER:$SERVICE_USER" "$REPORT_FILE"
-    chmod 600 "$REPORT_FILE"  # Lecture seule pour le propriétaire
-    
-    print_status "Rapport d'installation créé: $REPORT_FILE"
-}
-
-# Configuration post-installation
-post_install_setup() {
-    print_step "Configuration post-installation..."
-    
-    # Créer des scripts utiles
-    create_utility_scripts
-    
-    # Configurer la rotation des logs
-    setup_log_rotation
-    
-    # Créer un cron job pour les sauvegardes automatiques
-    setup_automatic_backups
-    
-    print_status "Configuration post-installation terminée"
-}
-
-create_utility_scripts() {
-    print_info "Création des scripts utiles..."
-    
-    # Script de sauvegarde
-    cat > "$INSTALL_DIR/backup.sh" << 'EOF'
-#!/bin/bash
-# Script de sauvegarde automatique PhishGuard
-
-BACKUP_DIR="/opt/phishguard-basic/storage/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-mkdir -p "$BACKUP_DIR"
-
-cd /opt/phishguard-basic
-
-echo "Début de la sauvegarde - $DATE"
-
-# Sauvegarde base de données
-sudo -u phishguard docker-compose exec -T db pg_dump -U phishguard phishguard_basic > "$BACKUP_DIR/db_backup_$DATE.sql"
-
-# Sauvegarde des fichiers de configuration
-tar -czf "$BACKUP_DIR/config_backup_$DATE.tar.gz" .env nginx/ storage/uploads/
-
-# Nettoyage des anciennes sauvegardes (garder 7 jours)
-find "$BACKUP_DIR" -name "*.sql" -mtime +7 -delete
-find "$BACKUP_DIR" -name "*.tar.gz" -mtime +7 -delete
-
-echo "Sauvegarde terminée - $DATE"
-EOF
-
-    # Script de maintenance
-    cat > "$INSTALL_DIR/maintenance.sh" << 'EOF'
-#!/bin/bash
-# Script de maintenance PhishGuard
-
-cd /opt/phishguard-basic
-
-echo "=== Maintenance PhishGuard - $(date) ==="
-
-# Nettoyage des logs anciens
-echo "Nettoyage des logs..."
-find storage/logs -name "*.log" -mtime +30 -delete 2>/dev/null || true
-
-# Nettoyage du cache
-echo "Nettoyage du cache..."
-sudo -u phishguard docker-compose exec -T redis redis-cli FLUSHALL
-
-# Optimisation base de données
-echo "Optimisation de la base de données..."
-sudo -u phishguard docker-compose exec -T db psql -U phishguard -d phishguard_basic -c "VACUUM ANALYZE;"
-
-# Vérification des services
-echo "Vérification des services..."
-sudo -u phishguard docker-compose ps
-
-echo "=== Maintenance terminée ==="
-EOF
-
-    # Script de mise à jour
-    cat > "$INSTALL_DIR/update.sh" << 'EOF'
-#!/bin/bash
-# Script de mise à jour PhishGuard
-
-cd /opt/phishguard-basic
-
-echo "=== Mise à jour PhishGuard - $(date) ==="
-
-# Sauvegarde avant mise à jour
-echo "Sauvegarde pré-mise à jour..."
-./backup.sh
-
-# Récupération des dernières modifications
-echo "Mise à jour du code source..."
-git stash
-git pull origin main
-git stash pop 2>/dev/null || true
-
-# Reconstruction des images
-echo "Reconstruction des images Docker..."
-sudo -u phishguard docker-compose build --no-cache
-
-# Redémarrage des services
-echo "Redémarrage des services..."
-sudo -u phishguard docker-compose down
-sudo -u phishguard docker-compose up -d
-
-echo "=== Mise à jour terminée ==="
-EOF
-
-    # Rendre les scripts exécutables
-    chmod +x "$INSTALL_DIR"/{backup.sh,maintenance.sh,update.sh}
-    chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"/{backup.sh,maintenance.sh,update.sh}
-    
-    print_info "Scripts utiles créés (backup.sh, maintenance.sh, update.sh)"
-}
-
-setup_log_rotation() {
-    print_info "Configuration de la rotation des logs..."
-    
-    cat > /etc/logrotate.d/phishguard << EOF
-$INSTALL_DIR/storage/logs/*.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    sharedscripts
-    postrotate
-        sudo -u $SERVICE_USER docker-compose -f $INSTALL_DIR/docker-compose.yml exec app kill -USR1 1 2>/dev/null || true
-    endscript
-}
-
-/var/log/nginx/*.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    sharedscripts
-    postrotate
-        sudo -u $SERVICE_USER docker-compose -f $INSTALL_DIR/docker-compose.yml exec nginx nginx -s reopen 2>/dev/null || true
-    endscript
-}
-EOF
-    
-    print_info "Rotation des logs configurée"
-}
-
-setup_automatic_backups() {
-    print_info "Configuration des sauvegardes automatiques..."
-    
-    # Ajouter une tâche cron pour les sauvegardes quotidiennes
-    (crontab -u "$SERVICE_USER" -l 2>/dev/null; echo "0 2 * * * $INSTALL_DIR/backup.sh >> $INSTALL_DIR/storage/logs/backup.log 2>&1") | crontab -u "$SERVICE_USER" -
-    
-    # Ajouter une tâche cron pour la maintenance hebdomadaire
-    (crontab -u "$SERVICE_USER" -l 2>/dev/null; echo "0 3 * * 0 $INSTALL_DIR/maintenance.sh >> $INSTALL_DIR/storage/logs/maintenance.log 2>&1") | crontab -u "$SERVICE_USER" -
-    
-    print_info "Sauvegardes automatiques configurées (quotidiennes à 2h)"
-}
-
-# Affichage final avec toutes les informations
-show_final_summary() {
-    clear
-    print_banner
-    
-    echo -e "${GREEN}🎉 INSTALLATION TERMINÉE AVEC SUCCÈS! 🎉${NC}"
-    echo ""
-    
-    # Informations de connexion
-    local PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "localhost")
-    local PRIVATE_IP=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "localhost")
-    
-    echo -e "${BLUE}📋 INFORMATIONS DE CONNEXION:${NC}"
-    echo -e "   🌐 URL locale: ${CYAN}http://localhost${NC}"
-    echo -e "   🌐 URL réseau: ${CYAN}http://$PRIVATE_IP${NC}"
-    echo -e "   🌐 URL publique: ${CYAN}http://$PUBLIC_IP${NC}"
-    echo -e "   👤 Utilisateur: ${YELLOW}admin${NC}"
-    echo -e "   🔑 Mot de passe: ${YELLOW}admin${NC}"
-    echo ""
-    
-    echo -e "${BLUE}📁 RÉPERTOIRES IMPORTANTS:${NC}"
-    echo -e "   📂 Installation: ${CYAN}$INSTALL_DIR${NC}"
-    echo -e "   🔧 Configuration: ${CYAN}$INSTALL_DIR/.env${NC}"
-    echo -e "   📊 Logs: ${CYAN}$INSTALL_DIR/storage/logs${NC}"
-    echo -e "   📈 Rapport: ${CYAN}$INSTALL_DIR/installation_report.txt${NC}"
-    echo ""
-    
-    echo -e "${BLUE}🔧 COMMANDES UTILES:${NC}"
-    echo -e "   🔍 Statut des services: ${CYAN}systemctl status phishguard${NC}"
-    echo -e "   📋 Logs en temps réel: ${CYAN}cd $INSTALL_DIR && sudo -u $SERVICE_USER docker-compose logs -f${NC}"
-    echo -e "   🔄 Redémarrer: ${CYAN}systemctl restart phishguard${NC}"
-    echo -e "   💾 Sauvegarde: ${CYAN}$INSTALL_DIR/backup.sh${NC}"
-    echo -e "   🔧 Configuration: ${CYAN}$INSTALL_DIR/configurator.sh${NC}"
-    echo ""
-    
-    echo -e "${YELLOW}⚠️  ACTIONS PRIORITAIRES:${NC}"
-    echo -e "   1. ${RED}Changez immédiatement${NC} le mot de passe admin"
-    echo -e "   2. ${YELLOW}Configurez${NC} votre serveur SMTP"
-    echo -e "   3. ${GREEN}Activez${NC} HTTPS pour la production"
-    echo -e "   4. ${BLUE}Importez${NC} votre liste d'employés"
-    echo -e "   5. ${PURPLE}Testez${NC} avec une campagne pilote"
-    echo ""
-    
-    echo -e "${GREEN}✨ PhishGuard BASIC est maintenant opérationnel! ✨${NC}"
-    echo -e "${BLUE}📧 Support: reaper@etik.com${NC}"
-    echo ""
-    
-    # Proposer d'ouvrir le configurateur
-    read -p "$(echo -e ${CYAN}Voulez-vous ouvrir le configurateur maintenant? [y/N]: ${NC})" -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [ -f "$INSTALL_DIR/configurator.sh" ]; then
-            cd "$INSTALL_DIR"
-            chmod +x configurator.sh
-            ./configurator.sh
-        else
-            print_warning "Configurateur non trouvé"
-        fi
-    fi
-}
-
-# Fonction principale
-main() {
-    print_banner
-    
-    # Confirmation avant installation
-    echo -e "${YELLOW}⚠️  Cette installation va:${NC}"
-    echo "   • Installer Docker et Docker Compose"
-    echo "   • Télécharger PhishGuard BASIC depuis GitHub"
-    echo "   • Créer un utilisateur système 'phishguard'"
-    echo "   • Configurer les services et la sécurité"
-    echo "   • Démarrer automatiquement tous les services"
-    echo "   • Configurer le firewall et Fail2Ban"
-    echo ""
-    
-    read -p "$(echo -e ${CYAN}Continuer l'installation? [y/N]: ${NC})" -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Installation annulée par l'utilisateur."
-        exit 0
-    fi
-    
-    # Initialisation des logs
-    log "=== DÉBUT DE L'INSTALLATION PHISHGUARD BASIC ==="
-    log "Date: $(date)"
-    log "Utilisateur: $(whoami)"
-    log "Système: $(uname -a)"
-    
-    # Étapes d'installation
-    detect_os
-    check_privileges
-    update_system
-    install_system_dependencies
-    install_docker
-    install_docker_compose
-    create_system_user
-    download_and_install_project
-    setup_directories_and_permissions
-    setup_environment
-    setup_firewall
-    setup_fail2ban
-    build_and_start_services
-    create_systemd_service
-    post_install_setup
-    run_validation_tests
-    generate_install_report
-    
-    # Finalisation
-    log "=== INSTALLATION TERMINÉE AVEC SUCCÈS ==="
-    show_final_summary
-}
-
-# Gestion des signaux d'interruption
-trap 'print_error "Installation interrompue par l utilisateur"; cleanup; exit 1' INT TERM
-
-# Point d'entrée principal
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi Installation automatique complète de PhishGuard BASIC
+# PhishGuard BASIC - Installation automatique complète
 # =================================================================
 
 set -e
@@ -1048,7 +705,7 @@ run_validation_tests() {
     local services=("db" "redis" "app" "nginx")
     
     for service in "${services[@]}"; do
-        local container_name="phishguard_${service}"
+        local container_name="${PROJECT_NAME}_${service}"
         if sudo -u "$SERVICE_USER" docker ps --filter "name=$container_name" --filter "status=running" --format "table {{.Names}}" | grep -q "$container_name"; then
             print_status "Service $service: opérationnel"
         else
@@ -1070,15 +727,7 @@ run_validation_tests() {
     
     # Test de la base de données
     print_info "Test de la base de données..."
-    if sudo -u "$SERVICE_USER" docker-compose exec -T app php -r "
-        try { 
-            \$pdo = new PDO('pgsql:host=db;port=5432;dbname=phishguard_basic', 'phishguard', getenv('DB_PASSWORD')); 
-            echo 'OK'; 
-        } catch(Exception \$e) { 
-            echo 'FAIL: ' . \$e->getMessage(); 
-            exit(1); 
-        }
-    " 2>/dev/null | grep -q "OK"; then
+    if sudo -u "$SERVICE_USER" docker-compose exec -T db psql -U phishguard -d phishguard_basic -c "SELECT 1;" >/dev/null 2>&1; then
         print_status "Base de données PostgreSQL: opérationnelle"
     else
         print_warning "Base de données: problème de connexion"
@@ -1152,8 +801,334 @@ GESTION DES SERVICES:
 ====================
 🔧 Service systemd: phishguard.service
 
-Commandes principales:
-- Démarrer: systemctl start phishguard
-- Arrêter: systemctl stop phishguard  
-- Redémarrer: systemctl restart phishguard
--
+COMMANDES UTILES:
+================
+# Statut du service
+systemctl status phishguard
+
+# Logs en temps réel
+cd $INSTALL_DIR && sudo -u $SERVICE_USER docker-compose logs -f
+
+# Redémarrage des services
+systemctl restart phishguard
+
+# Arrêt des services
+systemctl stop phishguard
+
+# Démarrage des services
+systemctl start phishguard
+
+# Sauvegarde manuelle
+$INSTALL_DIR/backup.sh
+
+# Maintenance
+$INSTALL_DIR/maintenance.sh
+
+# Mise à jour
+$INSTALL_DIR/update.sh
+
+SÉCURITÉ:
+=========
+🔥 Firewall: Configuré (ports 80, 443, 22)
+🛡️  Fail2Ban: $(command -v fail2ban-server &>/dev/null && echo "Configuré" || echo "Non installé")
+🔐 Utilisateur système: $SERVICE_USER (non-login)
+🔒 Permissions: Configurées selon les bonnes pratiques
+
+PROCHAINES ÉTAPES:
+==================
+1. 🔑 Changez le mot de passe administrateur par défaut
+2. 📧 Configurez votre serveur SMTP dans le fichier .env
+3. 🔒 Configurez SSL/TLS pour HTTPS (Let's Encrypt recommandé)
+4. 👥 Importez votre liste d'employés
+5. 📧 Créez votre première campagne de test
+
+RESSOURCES UTILES:
+==================
+📁 Fichiers de configuration: $INSTALL_DIR/nginx/
+📊 Logs de l'application: $INSTALL_DIR/storage/logs/
+💾 Sauvegardes: $INSTALL_DIR/storage/backups/
+
+SUPPORT ET DOCUMENTATION:
+=========================
+📧 Support: reaper@etik.com
+🐛 Issues GitHub: https://github.com/Reaper-Official/cyber-prevention-tool/issues
+📖 Documentation: README.md dans le répertoire d'installation
+
+NOTES IMPORTANTES:
+==================
+- Ce rapport contient des informations sensibles
+- Gardez vos identifiants de connexion sécurisés
+- Effectuez des sauvegardes régulières
+- Surveillez les logs pour détecter des anomalies
+
+Installation terminée avec succès le $(date)
+EOF
+
+    chown "$SERVICE_USER:$SERVICE_USER" "$REPORT_FILE"
+    chmod 600 "$REPORT_FILE"  # Lecture seule pour le propriétaire
+    
+    print_status "Rapport d'installation créé: $REPORT_FILE"
+}
+
+# Configuration post-installation
+post_install_setup() {
+    print_step "Configuration post-installation..."
+    
+    # Créer des scripts utiles
+    create_utility_scripts
+    
+    # Configurer la rotation des logs
+    setup_log_rotation
+    
+    # Créer un cron job pour les sauvegardes automatiques
+    setup_automatic_backups
+    
+    print_status "Configuration post-installation terminée"
+}
+
+create_utility_scripts() {
+    print_info "Création des scripts utiles..."
+    
+    # Script de sauvegarde
+    cat > "$INSTALL_DIR/backup.sh" << 'EOF'
+#!/bin/bash
+# Script de sauvegarde automatique PhishGuard
+
+BACKUP_DIR="/opt/phishguard-basic/storage/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+mkdir -p "$BACKUP_DIR"
+
+cd /opt/phishguard-basic
+
+echo "Début de la sauvegarde - $DATE"
+
+# Sauvegarde base de données
+sudo -u phishguard docker-compose exec -T db pg_dump -U phishguard phishguard_basic > "$BACKUP_DIR/db_backup_$DATE.sql"
+
+# Sauvegarde des fichiers de configuration
+tar -czf "$BACKUP_DIR/config_backup_$DATE.tar.gz" .env nginx/ storage/uploads/
+
+# Nettoyage des anciennes sauvegardes (garder 7 jours)
+find "$BACKUP_DIR" -name "*.sql" -mtime +7 -delete
+find "$BACKUP_DIR" -name "*.tar.gz" -mtime +7 -delete
+
+echo "Sauvegarde terminée - $DATE"
+EOF
+
+    # Script de maintenance
+    cat > "$INSTALL_DIR/maintenance.sh" << 'EOF'
+#!/bin/bash
+# Script de maintenance PhishGuard
+
+cd /opt/phishguard-basic
+
+echo "=== Maintenance PhishGuard - $(date) ==="
+
+# Nettoyage des logs anciens
+echo "Nettoyage des logs..."
+find storage/logs -name "*.log" -mtime +30 -delete 2>/dev/null || true
+
+# Nettoyage du cache
+echo "Nettoyage du cache..."
+sudo -u phishguard docker-compose exec -T redis redis-cli FLUSHALL
+
+# Optimisation base de données
+echo "Optimisation de la base de données..."
+sudo -u phishguard docker-compose exec -T db psql -U phishguard -d phishguard_basic -c "VACUUM ANALYZE;"
+
+# Vérification des services
+echo "Vérification des services..."
+sudo -u phishguard docker-compose ps
+
+echo "=== Maintenance terminée ==="
+EOF
+
+    # Script de mise à jour
+    cat > "$INSTALL_DIR/update.sh" << 'EOF'
+#!/bin/bash
+# Script de mise à jour PhishGuard
+
+cd /opt/phishguard-basic
+
+echo "=== Mise à jour PhishGuard - $(date) ==="
+
+# Sauvegarde avant mise à jour
+echo "Sauvegarde pré-mise à jour..."
+./backup.sh
+
+# Récupération des dernières modifications
+echo "Mise à jour du code source..."
+git stash
+git pull origin main
+git stash pop 2>/dev/null || true
+
+# Reconstruction des images
+echo "Reconstruction des images Docker..."
+sudo -u phishguard docker-compose build --no-cache
+
+# Redémarrage des services
+echo "Redémarrage des services..."
+sudo -u phishguard docker-compose down
+sudo -u phishguard docker-compose up -d
+
+echo "=== Mise à jour terminée ==="
+EOF
+
+    # Rendre les scripts exécutables
+    chmod +x "$INSTALL_DIR"/{backup.sh,maintenance.sh,update.sh}
+    chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"/{backup.sh,maintenance.sh,update.sh}
+    
+    print_info "Scripts utiles créés (backup.sh, maintenance.sh, update.sh)"
+}
+
+setup_log_rotation() {
+    print_info "Configuration de la rotation des logs..."
+    
+    cat > /etc/logrotate.d/phishguard << EOF
+$INSTALL_DIR/storage/logs/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    sharedscripts
+    postrotate
+        sudo -u $SERVICE_USER docker-compose -f $INSTALL_DIR/docker-compose.yml exec app kill -USR1 1 2>/dev/null || true
+    endscript
+}
+
+/var/log/nginx/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    sharedscripts
+    postrotate
+        sudo -u $SERVICE_USER docker-compose -f $INSTALL_DIR/docker-compose.yml exec nginx nginx -s reopen 2>/dev/null || true
+    endscript
+}
+EOF
+    
+    print_info "Rotation des logs configurée"
+}
+
+setup_automatic_backups() {
+    print_info "Configuration des sauvegardes automatiques..."
+    
+    # Ajouter une tâche cron pour les sauvegardes quotidiennes
+    (crontab -u "$SERVICE_USER" -l 2>/dev/null; echo "0 2 * * * $INSTALL_DIR/backup.sh >> $INSTALL_DIR/storage/logs/backup.log 2>&1") | crontab -u "$SERVICE_USER" -
+    
+    # Ajouter une tâche cron pour la maintenance hebdomadaire
+    (crontab -u "$SERVICE_USER" -l 2>/dev/null; echo "0 3 * * 0 $INSTALL_DIR/maintenance.sh >> $INSTALL_DIR/storage/logs/maintenance.log 2>&1") | crontab -u "$SERVICE_USER" -
+    
+    print_info "Sauvegardes automatiques configurées (quotidiennes à 2h)"
+}
+
+# Affichage final avec toutes les informations
+show_final_summary() {
+    clear
+    print_banner
+    
+    echo -e "${GREEN}🎉 INSTALLATION TERMINÉE AVEC SUCCÈS! 🎉${NC}"
+    echo ""
+    
+    # Informations de connexion
+    local PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "localhost")
+    local PRIVATE_IP=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "localhost")
+    
+    echo -e "${BLUE}📋 INFORMATIONS DE CONNEXION:${NC}"
+    echo -e "   🌐 URL locale: ${CYAN}http://localhost${NC}"
+    echo -e "   🌐 URL réseau: ${CYAN}http://$PRIVATE_IP${NC}"
+    echo -e "   🌐 URL publique: ${CYAN}http://$PUBLIC_IP${NC}"
+    echo -e "   👤 Utilisateur: ${YELLOW}admin${NC}"
+    echo -e "   🔑 Mot de passe: ${YELLOW}admin${NC}"
+    echo ""
+    
+    echo -e "${BLUE}📁 RÉPERTOIRES IMPORTANTS:${NC}"
+    echo -e "   📂 Installation: ${CYAN}$INSTALL_DIR${NC}"
+    echo -e "   🔧 Configuration: ${CYAN}$INSTALL_DIR/.env${NC}"
+    echo -e "   📊 Logs: ${CYAN}$INSTALL_DIR/storage/logs${NC}"
+    echo -e "   📈 Rapport: ${CYAN}$INSTALL_DIR/installation_report.txt${NC}"
+    echo ""
+    
+    echo -e "${BLUE}🔧 COMMANDES UTILES:${NC}"
+    echo -e "   🔍 Statut des services: ${CYAN}systemctl status phishguard${NC}"
+    echo -e "   📋 Logs en temps réel: ${CYAN}cd $INSTALL_DIR && sudo -u $SERVICE_USER docker-compose logs -f${NC}"
+    echo -e "   🔄 Redémarrer: ${CYAN}systemctl restart phishguard${NC}"
+    echo -e "   💾 Sauvegarde: ${CYAN}$INSTALL_DIR/backup.sh${NC}"
+    echo ""
+    
+    echo -e "${YELLOW}⚠️  ACTIONS PRIORITAIRES:${NC}"
+    echo -e "   1. ${RED}Changez immédiatement${NC} le mot de passe admin"
+    echo -e "   2. ${YELLOW}Configurez${NC} votre serveur SMTP"
+    echo -e "   3. ${GREEN}Activez${NC} HTTPS pour la production"
+    echo -e "   4. ${BLUE}Importez${NC} votre liste d'employés"
+    echo -e "   5. ${PURPLE}Testez${NC} avec une campagne pilote"
+    echo ""
+    
+    echo -e "${GREEN}✨ PhishGuard BASIC est maintenant opérationnel! ✨${NC}"
+    echo -e "${BLUE}📧 Support: reaper@etik.com${NC}"
+    echo ""
+}
+
+# Fonction principale
+main() {
+    print_banner
+    
+    # Confirmation avant installation
+    echo -e "${YELLOW}⚠️  Cette installation va:${NC}"
+    echo "   • Installer Docker et Docker Compose"
+    echo "   • Télécharger PhishGuard BASIC depuis GitHub"
+    echo "   • Créer un utilisateur système 'phishguard'"
+    echo "   • Configurer les services et la sécurité"
+    echo "   • Démarrer automatiquement tous les services"
+    echo "   • Configurer le firewall et Fail2Ban"
+    echo ""
+    
+    read -p "$(echo -e ${CYAN}Continuer l'installation? [y/N]: ${NC})" -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installation annulée par l'utilisateur."
+        exit 0
+    fi
+    
+    # Initialisation des logs
+    log "=== DÉBUT DE L'INSTALLATION PHISHGUARD BASIC ==="
+    log "Date: $(date)"
+    log "Utilisateur: $(whoami)"
+    log "Système: $(uname -a)"
+    
+    # Étapes d'installation
+    detect_os
+    check_privileges
+    update_system
+    install_system_dependencies
+    install_docker
+    install_docker_compose
+    create_system_user
+    download_and_install_project
+    setup_directories_and_permissions
+    setup_environment
+    setup_firewall
+    setup_fail2ban
+    build_and_start_services
+    create_systemd_service
+    post_install_setup
+    run_validation_tests
+    generate_install_report
+    
+    # Finalisation
+    log "=== INSTALLATION TERMINÉE AVEC SUCCÈS ==="
+    show_final_summary
+}
+
+# Gestion des signaux d'interruption
+trap 'print_error "Installation interrompue par l utilisateur"; cleanup; exit 1' INT TERM
+
+# Point d'entrée principal
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
