@@ -2,6 +2,7 @@
 # PhishGuard BASIC - Installation automatique complète
 # =================================================================
 # Repository: https://github.com/Reaper-Official/cyber-prevention-tool
+# Branch: dev
 # Version: 1.0
 # Auteur: Reaper Official
 
@@ -9,6 +10,7 @@ set -e
 
 # Configuration globale
 REPO_URL="https://github.com/Reaper-Official/cyber-prevention-tool"
+BRANCH="dev"
 PROJECT_NAME="phishguard-basic"
 INSTALL_DIR="/opt/$PROJECT_NAME"
 SERVICE_USER="phishguard"
@@ -473,10 +475,13 @@ download_and_install_project() {
     mkdir -p "$TEMP_DIR"
     cd "$TEMP_DIR"
     
-    # Cloner le repository
-    print_info "Clonage depuis GitHub: $REPO_URL"
-    if ! git clone "$REPO_URL" phishguard-source; then
-        error_exit "Échec du clonage du repository GitHub"
+    # Cloner le repository avec la branche dev
+    print_info "Clonage depuis GitHub: $REPO_URL (branche: $BRANCH)"
+    if ! git clone -b "$BRANCH" "$REPO_URL" phishguard-source; then
+        print_warning "Échec du clonage de la branche $BRANCH, tentative avec la branche main"
+        if ! git clone "$REPO_URL" phishguard-source; then
+            error_exit "Échec du clonage du repository GitHub"
+        fi
     fi
     
     if [ ! -d "phishguard-source" ]; then
@@ -490,10 +495,15 @@ download_and_install_project() {
     print_info "Copie des fichiers vers $INSTALL_DIR"
     cp -r phishguard-source/* "$INSTALL_DIR/"
     
-    # Vérifier la structure du projet
+    # Vérifier la structure du projet et copier les fichiers importants
     if [ -f "$INSTALL_DIR/app-full/management/docker-compose.yml" ]; then
         cp "$INSTALL_DIR/app-full/management/docker-compose.yml" "$INSTALL_DIR/"
         print_info "docker-compose.yml copié depuis app-full/management"
+    fi
+    
+    if [ -f "$INSTALL_DIR/app-full/management/Dockerfile" ]; then
+        cp "$INSTALL_DIR/app-full/management/Dockerfile" "$INSTALL_DIR/"
+        print_info "Dockerfile copié depuis app-full/management"
     fi
     
     if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
@@ -521,11 +531,6 @@ setup_directories_and_permissions() {
     
     # Copier les fichiers de configuration depuis app-full/management si disponibles
     if [ -d "app-full/management" ]; then
-        # Copier Dockerfile
-        if [ -f "app-full/management/Dockerfile" ]; then
-            cp "app-full/management/Dockerfile" ./
-        fi
-        
         # Copier configurations nginx
         if [ -d "app-full/management/nginx" ]; then
             cp -r app-full/management/nginx/* nginx/ 2>/dev/null || true
@@ -563,18 +568,24 @@ setup_environment() {
     cd "$INSTALL_DIR"
     
     if [ ! -f .env ]; then
+        # Copier le fichier .env exemple s'il existe
+        if [ -f "app-full/management/.env" ]; then
+            cp "app-full/management/.env" .env
+            print_info "Fichier .env copié depuis app-full/management"
+        fi
+        
         # Générer des clés sécurisées
         DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
         JWT_SECRET=$(openssl rand -hex 32)
         ENCRYPTION_KEY=$(openssl rand -hex 32)
-        APP_KEY="base64:$(openssl rand -base64 32)"
         
         # Détecter les adresses IP
         PUBLIC_IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || curl -s --connect-timeout 5 ipecho.net/plain 2>/dev/null || echo "localhost")
         PRIVATE_IP=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "localhost")
         
-        # Créer le fichier .env
-        cat > .env << EOF
+        # Créer ou mettre à jour le fichier .env
+        if [ ! -f .env ]; then
+            cat > .env << EOF
 # PhishGuard BASIC - Configuration
 # Généré automatiquement le $(date)
 # =======================================
@@ -583,55 +594,42 @@ setup_environment() {
 APP_NAME="PhishGuard BASIC"
 APP_ENV=production
 APP_DEBUG=false
-APP_KEY=$APP_KEY
 APP_URL=http://$PUBLIC_IP
 APP_TIMEZONE=Europe/Paris
-APP_LOCALE=fr
-APP_FALLBACK_LOCALE=en
 
 # Base de données PostgreSQL
 DB_CONNECTION=pgsql
 DB_HOST=db
 DB_PORT=5432
-DB_DATABASE=phishguard_basic
-DB_USERNAME=phishguard
+DB_NAME=phishguard_basic
+DB_USER=phishguard
 DB_PASSWORD=$DB_PASSWORD
 
 # Cache Redis
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=
-REDIS_DB=0
 
 # Configuration SMTP (à configurer)
-MAIL_MAILER=smtp
-MAIL_HOST=localhost
-MAIL_PORT=587
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_ENCRYPTION=tls
-MAIL_FROM_ADDRESS=noreply@phishguard.local
-MAIL_FROM_NAME="PhishGuard Security"
+SMTP_HOST=localhost
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_ENCRYPTION=tls
+SMTP_FROM_NAME="PhishGuard Security"
 
-# Configuration Queue
-QUEUE_CONNECTION=redis
-QUEUE_FAILED_DRIVER=database
-
-# Session
-SESSION_DRIVER=redis
-SESSION_LIFETIME=1440
-SESSION_ENCRYPT=false
-SESSION_PATH=/
-SESSION_DOMAIN=
+# Intelligence Artificielle (optionnel)
+GEMINI_API_KEY=
+AI_MODEL=gemini-pro
+AI_MAX_TOKENS=2048
 
 # Sécurité
 JWT_SECRET=$JWT_SECRET
 ENCRYPTION_KEY=$ENCRYPTION_KEY
+SESSION_LIFETIME=1440
 BCRYPT_ROUNDS=12
 
 # Performance et limitations
-UPLOAD_MAX_FILESIZE=10M
-POST_MAX_SIZE=10M
 EMAIL_RATE_LIMIT=50
 MAX_UPLOAD_SIZE=10485760
 
@@ -640,23 +638,20 @@ GDPR_ENABLED=true
 DATA_RETENTION_DAYS=365
 ANONYMIZE_LOGS=true
 
-# Logs
-LOG_CHANNEL=stack
+# Monitoring et logs
 LOG_LEVEL=info
-LOG_MAX_FILES=30
-
-# Intelligence Artificielle (optionnel)
-GEMINI_API_KEY=
-AI_MODEL=gemini-pro
-AI_MAX_TOKENS=2048
-
-# Monitoring et audit
+LOG_FILE=/var/log/phishguard/app.log
 AUDIT_LOG_ENABLED=true
-HEALTH_CHECK_ENABLED=true
-METRICS_ENABLED=true
 EOF
+        else
+            # Mettre à jour les clés dans le fichier existant
+            sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$DB_PASSWORD/" .env
+            sed -i "s/JWT_SECRET=.*/JWT_SECRET=$JWT_SECRET/" .env
+            sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$ENCRYPTION_KEY/" .env
+            sed -i "s|APP_URL=.*|APP_URL=http://$PUBLIC_IP|" .env
+        fi
 
-        print_status "Fichier .env créé avec des clés sécurisées"
+        print_status "Fichier .env configuré avec des clés sécurisées"
     else
         print_info "Fichier .env existant conservé"
     fi
@@ -798,18 +793,24 @@ build_and_start_services() {
     
     # Nettoyer les anciens conteneurs si ils existent
     print_info "Nettoyage des anciens conteneurs..."
+    sudo -u "$SERVICE_USER" docker compose down 2>/dev/null || \
     sudo -u "$SERVICE_USER" docker-compose down 2>/dev/null || true
     
     # Construction des images
     print_info "Construction des images Docker..."
-    if ! sudo -u "$SERVICE_USER" docker-compose build --no-cache --pull; then
-        print_warning "Construction avec cache..."
-        sudo -u "$SERVICE_USER" docker-compose build
+    if ! sudo -u "$SERVICE_USER" docker compose build --no-cache --pull 2>/dev/null; then
+        if ! sudo -u "$SERVICE_USER" docker-compose build --no-cache --pull 2>/dev/null; then
+            print_warning "Construction avec cache..."
+            sudo -u "$SERVICE_USER" docker compose build 2>/dev/null || \
+            sudo -u "$SERVICE_USER" docker-compose build
+        fi
     fi
     
     # Démarrage des services
     print_info "Démarrage des services..."
-    sudo -u "$SERVICE_USER" docker-compose up -d
+    if ! sudo -u "$SERVICE_USER" docker compose up -d 2>/dev/null; then
+        sudo -u "$SERVICE_USER" docker-compose up -d
+    fi
     
     # Attendre que PostgreSQL soit prêt
     print_info "Attente de l'initialisation de PostgreSQL..."
@@ -817,7 +818,8 @@ build_and_start_services() {
     local attempt=1
     
     while [ $attempt -le $max_attempts ]; do
-        if sudo -u "$SERVICE_USER" docker-compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1; then
+        if sudo -u "$SERVICE_USER" docker compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1 || \
+           sudo -u "$SERVICE_USER" docker-compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1; then
             print_status "PostgreSQL opérationnel"
             break
         fi
@@ -837,7 +839,8 @@ build_and_start_services() {
     # Attendre que Redis soit prêt
     print_info "Vérification de Redis..."
     sleep 5
-    if sudo -u "$SERVICE_USER" docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
+    if sudo -u "$SERVICE_USER" docker compose exec -T redis redis-cli ping >/dev/null 2>&1 || \
+       sudo -u "$SERVICE_USER" docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
         print_status "Redis opérationnel"
     else
         print_warning "Redis en cours de démarrage"
@@ -847,7 +850,12 @@ build_and_start_services() {
     if [ -f "app-full/management/setup.php" ]; then
         print_info "Initialisation de la base de données..."
         sleep 10
-        sudo -u "$SERVICE_USER" docker-compose exec -T app php app-full/management/setup.php 2>/dev/null || print_warning "Script d'initialisation non exécuté"
+        if sudo -u "$SERVICE_USER" docker compose exec -T app php app-full/management/setup.php 2>/dev/null || \
+           sudo -u "$SERVICE_USER" docker-compose exec -T app php app-full/management/setup.php 2>/dev/null; then
+            print_status "Base de données initialisée"
+        else
+            print_warning "Script d'initialisation non exécuté - à faire manuellement"
+        fi
     fi
     
     print_status "Services Docker démarrés"
@@ -861,9 +869,9 @@ create_systemd_service() {
     print_step "Création du service systemd..."
     
     # Déterminer la commande docker-compose
-    COMPOSE_CMD="docker-compose"
-    if docker compose version &> /dev/null 2>&1; then
-        COMPOSE_CMD="docker compose"
+    COMPOSE_CMD="docker compose"
+    if ! docker compose version &> /dev/null 2>&1; then
+        COMPOSE_CMD="docker-compose"
     fi
     
     cat > /etc/systemd/system/phishguard.service << EOF
@@ -924,7 +932,8 @@ echo "=== Début de la sauvegarde - $DATE ==="
 
 # Sauvegarde de la base de données
 echo "Sauvegarde de la base de données..."
-if sudo -u phishguard docker-compose exec -T db pg_dump -U phishguard phishguard_basic > "$BACKUP_DIR/db_backup_$DATE.sql" 2>/dev/null; then
+if sudo -u phishguard docker compose exec -T db pg_dump -U phishguard phishguard_basic > "$BACKUP_DIR/db_backup_$DATE.sql" 2>/dev/null || \
+   sudo -u phishguard docker-compose exec -T db pg_dump -U phishguard phishguard_basic > "$BACKUP_DIR/db_backup_$DATE.sql" 2>/dev/null; then
     echo "✅ Base de données sauvegardée"
     gzip "$BACKUP_DIR/db_backup_$DATE.sql"
 else
@@ -965,7 +974,8 @@ echo "✅ Logs anciens supprimés"
 
 # Nettoyage du cache Redis
 echo "Nettoyage du cache Redis..."
-if sudo -u phishguard docker-compose exec -T redis redis-cli FLUSHALL >/dev/null 2>&1; then
+if sudo -u phishguard docker compose exec -T redis redis-cli FLUSHALL >/dev/null 2>&1 || \
+   sudo -u phishguard docker-compose exec -T redis redis-cli FLUSHALL >/dev/null 2>&1; then
     echo "✅ Cache Redis nettoyé"
 else
     echo "⚠️ Impossible de nettoyer le cache Redis"
@@ -973,7 +983,8 @@ fi
 
 # Optimisation de la base de données
 echo "Optimisation de la base de données..."
-if sudo -u phishguard docker-compose exec -T db psql -U phishguard -d phishguard_basic -c "VACUUM ANALYZE;" >/dev/null 2>&1; then
+if sudo -u phishguard docker compose exec -T db psql -U phishguard -d phishguard_basic -c "VACUUM ANALYZE;" >/dev/null 2>&1 || \
+   sudo -u phishguard docker-compose exec -T db psql -U phishguard -d phishguard_basic -c "VACUUM ANALYZE;" >/dev/null 2>&1; then
     echo "✅ Base de données optimisée"
 else
     echo "⚠️ Impossible d'optimiser la base de données"
@@ -981,7 +992,7 @@ fi
 
 # Vérification de l'état des services
 echo "Vérification des services..."
-sudo -u phishguard docker-compose ps
+sudo -u phishguard docker compose ps 2>/dev/null || sudo -u phishguard docker-compose ps
 
 # Statistiques d'espace disque
 echo "Espace disque utilisé:"
@@ -1016,13 +1027,13 @@ fi
 
 # Arrêt des services
 echo "Arrêt des services..."
-sudo -u phishguard docker-compose down
+sudo -u phishguard docker compose down 2>/dev/null || sudo -u phishguard docker-compose down
 
 # Mise à jour du code source
 echo "Mise à jour du code source..."
 if [ -d .git ]; then
     git stash push -m "Auto-stash before update $(date)"
-    if git pull origin main; then
+    if git pull origin dev || git pull origin main; then
         echo "✅ Code source mis à jour"
         git stash pop 2>/dev/null || echo "Aucun stash à restaurer"
     else
@@ -1035,16 +1046,17 @@ fi
 
 # Reconstruction des images Docker
 echo "Reconstruction des images Docker..."
-if sudo -u phishguard docker-compose build --no-cache --pull; then
+if sudo -u phishguard docker compose build --no-cache --pull 2>/dev/null || \
+   sudo -u phishguard docker-compose build --no-cache --pull; then
     echo "✅ Images Docker reconstruites"
 else
     echo "⚠️ Reconstruction avec cache..."
-    sudo -u phishguard docker-compose build
+    sudo -u phishguard docker compose build 2>/dev/null || sudo -u phishguard docker-compose build
 fi
 
 # Redémarrage des services
 echo "Redémarrage des services..."
-sudo -u phishguard docker-compose up -d
+sudo -u phishguard docker compose up -d 2>/dev/null || sudo -u phishguard docker-compose up -d
 
 # Attendre que les services soient prêts
 echo "Attente de la disponibilité des services..."
@@ -1052,7 +1064,7 @@ sleep 30
 
 # Vérification de l'état
 echo "Vérification de l'état après mise à jour..."
-sudo -u phishguard docker-compose ps
+sudo -u phishguard docker compose ps 2>/dev/null || sudo -u phishguard docker-compose ps
 
 echo "=== Mise à jour terminée ==="
 EOF
@@ -1071,7 +1083,7 @@ echo "=== Diagnostic PhishGuard - $(date) ==="
 echo "📊 Informations système:"
 echo "   OS: $(uname -a)"
 echo "   Docker: $(docker --version 2>/dev/null || echo 'Non installé')"
-echo "   Docker Compose: $(docker-compose --version 2>/dev/null || echo 'Non installé')"
+echo "   Docker Compose: $(docker compose version 2>/dev/null || docker-compose --version 2>/dev/null || echo 'Non installé')"
 echo "   Espace disque: $(df -h . | tail -1 | awk '{print $4}') disponible"
 echo "   RAM: $(free -h | grep '^Mem:' | awk '{print $3"/"$2}')"
 
@@ -1087,7 +1099,7 @@ fi
 # État des conteneurs Docker
 echo ""
 echo "🐳 État des conteneurs:"
-sudo -u phishguard docker-compose ps
+sudo -u phishguard docker compose ps 2>/dev/null || sudo -u phishguard docker-compose ps
 
 # Tests de connectivité
 echo ""
@@ -1101,10 +1113,11 @@ fi
 # Vérification de la base de données
 echo ""
 echo "💾 Base de données:"
-if sudo -u phishguard docker-compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1; then
+if sudo -u phishguard docker compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1 || \
+   sudo -u phishguard docker-compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1; then
     echo "   ✅ PostgreSQL: opérationnel"
     # Statistiques de la base
-    TABLES_COUNT=$(sudo -u phishguard docker-compose exec -T db psql -U phishguard -d phishguard_basic -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | tr -d ' \n' || echo "N/A")
+    TABLES_COUNT=$(sudo -u phishguard docker compose exec -T db psql -U phishguard -d phishguard_basic -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | tr -d ' \n' || echo "N/A")
     echo "   📊 Nombre de tables: $TABLES_COUNT"
 else
     echo "   ❌ PostgreSQL: problème détecté"
@@ -1113,9 +1126,10 @@ fi
 # Vérification de Redis
 echo ""
 echo "⚡ Cache Redis:"
-if sudo -u phishguard docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
+if sudo -u phishguard docker compose exec -T redis redis-cli ping >/dev/null 2>&1 || \
+   sudo -u phishguard docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
     echo "   ✅ Redis: opérationnel"
-    REDIS_MEMORY=$(sudo -u phishguard docker-compose exec -T redis redis-cli info memory 2>/dev/null | grep "used_memory_human:" | cut -d: -f2 | tr -d '\r' || echo "N/A")
+    REDIS_MEMORY=$(sudo -u phishguard docker compose exec -T redis redis-cli info memory 2>/dev/null | grep "used_memory_human:" | cut -d: -f2 | tr -d '\r' || echo "N/A")
     echo "   📊 Mémoire utilisée: $REDIS_MEMORY"
 else
     echo "   ❌ Redis: problème détecté"
@@ -1124,15 +1138,24 @@ fi
 # Logs récents
 echo ""
 echo "📋 Logs récents (10 dernières lignes):"
-sudo -u phishguard docker-compose logs --tail=10
+sudo -u phishguard docker compose logs --tail=10 2>/dev/null || sudo -u phishguard docker-compose logs --tail=10
 
 echo ""
 echo "=== Diagnostic terminé ==="
 EOF
 
+    # Script de configurateur
+    if [ -f "app-full/management/configurator.sh" ]; then
+        cp "app-full/management/configurator.sh" "$INSTALL_DIR/"
+        print_info "Configurateur interactif copié"
+    fi
+
     # Rendre tous les scripts exécutables
-    chmod +x "$INSTALL_DIR"/{backup.sh,maintenance.sh,update.sh,diagnostic.sh}
-    chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"/{backup.sh,maintenance.sh,update.sh,diagnostic.sh}
+    chmod +x "$INSTALL_DIR"/{backup.sh,maintenance.sh,update.sh,diagnostic.sh} 2>/dev/null || true
+    if [ -f "$INSTALL_DIR/configurator.sh" ]; then
+        chmod +x "$INSTALL_DIR/configurator.sh"
+    fi
+    chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"/*.sh 2>/dev/null || true
     
     print_info "Scripts utiles créés: backup.sh, maintenance.sh, update.sh, diagnostic.sh"
 }
@@ -1151,6 +1174,7 @@ $INSTALL_DIR/storage/logs/*.log {
     copytruncate
     sharedscripts
     postrotate
+        sudo -u $SERVICE_USER docker compose -f $INSTALL_DIR/docker-compose.yml kill -s USR1 app 2>/dev/null || \
         sudo -u $SERVICE_USER docker-compose -f $INSTALL_DIR/docker-compose.yml kill -s USR1 app 2>/dev/null || true
     endscript
 }
@@ -1198,7 +1222,8 @@ run_validation_tests() {
     local services=("db" "redis" "app" "nginx")
     
     for service in "${services[@]}"; do
-        if sudo -u "$SERVICE_USER" docker-compose ps "$service" | grep -q "Up"; then
+        if sudo -u "$SERVICE_USER" docker compose ps "$service" 2>/dev/null | grep -q "Up" || \
+           sudo -u "$SERVICE_USER" docker-compose ps "$service" 2>/dev/null | grep -q "Up"; then
             print_status "Service $service: opérationnel"
         else
             print_error "Service $service: problème détecté"
@@ -1219,7 +1244,8 @@ run_validation_tests() {
     
     # Test de la base de données
     print_info "Test de la base de données..."
-    if sudo -u "$SERVICE_USER" docker-compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1; then
+    if sudo -u "$SERVICE_USER" docker compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1 || \
+       sudo -u "$SERVICE_USER" docker-compose exec -T db pg_isready -U phishguard -d phishguard_basic >/dev/null 2>&1; then
         print_status "Base de données PostgreSQL: opérationnelle"
     else
         print_warning "Base de données: en cours d'initialisation"
@@ -1228,7 +1254,8 @@ run_validation_tests() {
     
     # Test Redis
     print_info "Test du cache Redis..."
-    if sudo -u "$SERVICE_USER" docker-compose exec -T redis redis-cli ping 2>/dev/null | grep -q "PONG"; then
+    if sudo -u "$SERVICE_USER" docker compose exec -T redis redis-cli ping 2>/dev/null | grep -q "PONG" || \
+       sudo -u "$SERVICE_USER" docker-compose exec -T redis redis-cli ping 2>/dev/null | grep -q "PONG"; then
         print_status "Redis: opérationnel"
     else
         print_warning "Redis: problème détecté"
@@ -1271,6 +1298,7 @@ Date d'installation: $(date)
 Système: $(uname -a)
 Utilisateur d'installation: $(whoami)
 Répertoire d'installation: $INSTALL_DIR
+Repository: $REPO_URL (branche: $BRANCH)
 
 INFORMATIONS SYSTÈME:
 ====================
@@ -1279,7 +1307,7 @@ Gestionnaire de paquets: $PKG_MANAGER
 Adresse IP privée: $PRIVATE_IP
 Adresse IP publique: $PUBLIC_IP
 Docker: $(docker --version 2>/dev/null || echo "Non détecté")
-Docker Compose: $(docker-compose --version 2>/dev/null || echo "Plugin Docker")
+Docker Compose: $(docker compose version --short 2>/dev/null || docker-compose --version 2>/dev/null || echo "Plugin Docker")
 
 SERVICES INSTALLÉS:
 ==================
@@ -1316,12 +1344,12 @@ Commandes principales:
 COMMANDES DOCKER UTILES:
 ========================
 cd $INSTALL_DIR
-sudo -u $SERVICE_USER docker-compose logs -f      # Voir tous les logs
-sudo -u $SERVICE_USER docker-compose logs app     # Logs de l'application
-sudo -u $SERVICE_USER docker-compose ps           # Statut des conteneurs
-sudo -u $SERVICE_USER docker-compose restart      # Redémarrage complet
-sudo -u $SERVICE_USER docker-compose down         # Arrêt complet
-sudo -u $SERVICE_USER docker-compose up -d        # Démarrage
+sudo -u $SERVICE_USER docker compose logs -f      # Voir tous les logs
+sudo -u $SERVICE_USER docker compose logs app     # Logs de l'application
+sudo -u $SERVICE_USER docker compose ps           # Statut des conteneurs
+sudo -u $SERVICE_USER docker compose restart      # Redémarrage complet
+sudo -u $SERVICE_USER docker compose down         # Arrêt complet
+sudo -u $SERVICE_USER docker compose up -d        # Démarrage
 
 SCRIPTS UTILES:
 ===============
@@ -1329,6 +1357,7 @@ $INSTALL_DIR/backup.sh        # Sauvegarde manuelle
 $INSTALL_DIR/maintenance.sh   # Maintenance et nettoyage
 $INSTALL_DIR/update.sh        # Mise à jour depuis GitHub
 $INSTALL_DIR/diagnostic.sh    # Diagnostic complet
+$INSTALL_DIR/configurator.sh  # Configuration interactive
 
 SÉCURITÉ:
 =========
@@ -1353,6 +1382,11 @@ PROCHAINES ÉTAPES RECOMMANDÉES:
 6. 📊 Configurez la surveillance et les alertes
 7. 🧪 Effectuez des tests de sécurité réguliers
 
+CONFIGURATION INTERACTIVE:
+==========================
+Pour configurer facilement PhishGuard:
+sudo $INSTALL_DIR/configurator.sh
+
 RESSOURCES UTILES:
 ==================
 📁 Configuration Nginx: $INSTALL_DIR/nginx/
@@ -1363,7 +1397,7 @@ RESSOURCES UTILES:
 SUPPORT ET DOCUMENTATION:
 =========================
 📧 Support: reaper@etik.com
-🐛 Issues GitHub: https://github.com/Reaper-Official/cyber-prevention-tool/issues
+🐛 Issues GitHub: $REPO_URL/issues
 📖 Documentation: README.md dans le répertoire d'installation
 🌐 Repository: $REPO_URL
 
@@ -1376,10 +1410,10 @@ $INSTALL_DIR/diagnostic.sh
 systemctl restart phishguard
 
 # Voir les logs en temps réel
-cd $INSTALL_DIR && sudo -u $SERVICE_USER docker-compose logs -f
+cd $INSTALL_DIR && sudo -u $SERVICE_USER docker compose logs -f
 
 # Vérifier l'état des conteneurs
-cd $INSTALL_DIR && sudo -u $SERVICE_USER docker-compose ps
+cd $INSTALL_DIR && sudo -u $SERVICE_USER docker compose ps
 
 NOTES IMPORTANTES:
 ==================
@@ -1464,13 +1498,14 @@ show_final_summary() {
     
     echo -e "${BLUE}🔧 COMMANDES UTILES:${NC}"
     echo -e "   🔍 Statut: ${CYAN}systemctl status phishguard${NC}"
-    echo -e "   📋 Logs temps réel: ${CYAN}cd $INSTALL_DIR && sudo -u $SERVICE_USER docker-compose logs -f${NC}"
+    echo -e "   📋 Logs temps réel: ${CYAN}cd $INSTALL_DIR && sudo -u $SERVICE_USER docker compose logs -f${NC}"
     echo -e "   🔄 Redémarrer: ${CYAN}systemctl restart phishguard${NC}"
     echo -e "   🚀 Démarrage rapide: ${CYAN}$INSTALL_DIR/start.sh${NC}"
     echo -e "   🔧 Diagnostic: ${CYAN}$INSTALL_DIR/diagnostic.sh${NC}"
     echo -e "   💾 Sauvegarde: ${CYAN}$INSTALL_DIR/backup.sh${NC}"
     echo -e "   🧹 Maintenance: ${CYAN}$INSTALL_DIR/maintenance.sh${NC}"
     echo -e "   🔄 Mise à jour: ${CYAN}$INSTALL_DIR/update.sh${NC}"
+    echo -e "   ⚙️  Configuration: ${CYAN}sudo $INSTALL_DIR/configurator.sh${NC}"
     echo ""
     
     echo -e "${YELLOW}⚠️  ACTIONS PRIORITAIRES:${NC}"
@@ -1483,17 +1518,24 @@ show_final_summary() {
     
     echo -e "${GREEN}✨ PhishGuard BASIC est maintenant opérationnel! ✨${NC}"
     echo -e "${BLUE}📧 Support: ${CYAN}reaper@etik.com${NC}"
-    echo -e "${BLUE}🐛 Issues: ${CYAN}https://github.com/Reaper-Official/cyber-prevention-tool/issues${NC}"
+    echo -e "${BLUE}🐛 Issues: ${CYAN}$REPO_URL/issues${NC}"
     echo ""
     
     # Test rapide de connectivité
     echo -e "${PURPLE}🔍 Test de connectivité final...${NC}"
     if curl -s -o /dev/null -w "%{http_code}" http://localhost --connect-timeout 5 | grep -q "200\|301\|302"; then
         echo -e "${GREEN}✅ Interface web accessible !${NC}"
+        echo -e "${CYAN}🚀 Accédez à PhishGuard: http://localhost${NC}"
     else
         echo -e "${YELLOW}⏳ Interface web en cours de démarrage... (essayez dans quelques minutes)${NC}"
+        echo -e "${INFO} Les services peuvent prendre jusqu'à 5 minutes pour être complètement opérationnels"
     fi
     echo ""
+    
+    echo -e "${WHITE}═══════════════════════════════════════${NC}"
+    echo -e "${GREEN}Installation terminée! Consultez le rapport détaillé:${NC}"
+    echo -e "${CYAN}cat $INSTALL_DIR/installation_report.txt${NC}"
+    echo -e "${WHITE}═══════════════════════════════════════${NC}"
 }
 
 # =======================
@@ -1506,7 +1548,7 @@ main() {
     log "Date: $(date)"
     log "Utilisateur: $(whoami)"
     log "Système: $(uname -a)"
-    log "Repository: $REPO_URL"
+    log "Repository: $REPO_URL (branche: $BRANCH)"
     
     print_banner
     
@@ -1514,7 +1556,7 @@ main() {
     echo -e "${YELLOW}⚠️  Cette installation va:${NC}"
     echo "   • Mettre à jour le système"
     echo "   • Installer Docker et Docker Compose"
-    echo "   • Télécharger PhishGuard BASIC depuis GitHub"
+    echo "   • Télécharger PhishGuard BASIC depuis GitHub (branche: $BRANCH)"
     echo "   • Créer un utilisateur système 'phishguard'"
     echo "   • Configurer les services et la sécurité"
     echo "   • Démarrer automatiquement tous les services"
@@ -1522,6 +1564,7 @@ main() {
     echo "   • Créer des scripts de maintenance automatiques"
     echo ""
     echo -e "${INFO} Repository: ${CYAN}$REPO_URL${NC}"
+    echo -e "${INFO} Branche: ${CYAN}$BRANCH${NC}"
     echo -e "${INFO} Installation dans: ${CYAN}$INSTALL_DIR${NC}"
     echo ""
     
@@ -1558,9 +1601,187 @@ main() {
 }
 
 # =======================
-# POINT D'ENTRÉE
+# FONCTIONS SUPPLÉMENTAIRES
 # =======================
 
+# Fonction pour installer des paquets supplémentaires selon les besoins
+install_optional_packages() {
+    print_step "Installation de paquets optionnels..."
+    
+    case $PKG_MANAGER in
+        "apt")
+            # Outils de surveillance et optimisation
+            apt install -y iotop ncdu glances 2>/dev/null || true
+            ;;
+        "yum"|"dnf")
+            $PKG_MANAGER install -y iotop ncdu glances 2>/dev/null || true
+            ;;
+        "pacman")
+            pacman -S --noconfirm iotop ncdu glances 2>/dev/null || true
+            ;;
+    esac
+    
+    print_info "Paquets optionnels installés"
+}
+
+# Fonction de vérification finale avancée
+advanced_health_check() {
+    print_step "Vérification avancée du système..."
+    
+    cd "$INSTALL_DIR"
+    
+    # Vérifier les ports utilisés
+    print_info "Vérification des ports..."
+    local ports=("80" "443" "5432" "6379")
+    for port in "${ports[@]}"; do
+        if netstat -tlnp 2>/dev/null | grep -q ":$port "; then
+            print_info "Port $port: utilisé"
+        else
+            print_warning "Port $port: libre (peut être normal selon la configuration)"
+        fi
+    done
+    
+    # Vérifier les processus Docker
+    print_info "Vérification des processus Docker..."
+    if docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q phishguard; then
+        print_status "Conteneurs PhishGuard en cours d'exécution"
+    else
+        print_warning "Aucun conteneur PhishGuard détecté"
+    fi
+    
+    # Vérifier l'utilisation des ressources
+    print_info "Vérification des ressources système..."
+    local cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)
+    local mem_usage=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
+    
+    echo "   CPU: ${cpu_usage}%"
+    echo "   RAM: ${mem_usage}%"
+    
+    if [ "${mem_usage%.*}" -gt 80 ]; then
+        print_warning "Utilisation RAM élevée: ${mem_usage}%"
+    fi
+}
+
+# Fonction de nettoyage de sécurité
+security_cleanup() {
+    print_step "Nettoyage de sécurité..."
+    
+    # Nettoyer l'historique des commandes sensibles
+    history -c 2>/dev/null || true
+    
+    # Nettoyer les fichiers temporaires
+    find /tmp -name "phishguard*" -type f -delete 2>/dev/null || true
+    
+    # Sécuriser les permissions des fichiers de configuration
+    find "$INSTALL_DIR" -name "*.env" -exec chmod 600 {} \; 2>/dev/null || true
+    find "$INSTALL_DIR" -name "*.key" -exec chmod 600 {} \; 2>/dev/null || true
+    
+    print_status "Nettoyage de sécurité terminé"
+}
+
+# =======================
+# GESTION DES ARGUMENTS
+# =======================
+
+# Fonction d'aide
+show_help() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help          Afficher cette aide"
+    echo "  -v, --verbose       Mode verbeux"
+    echo "  -q, --quiet         Mode silencieux"
+    echo "  --branch BRANCH     Spécifier la branche Git (défaut: dev)"
+    echo "  --install-dir DIR   Répertoire d'installation (défaut: /opt/phishguard-basic)"
+    echo "  --skip-firewall     Ne pas configurer le firewall"
+    echo "  --skip-fail2ban     Ne pas configurer Fail2Ban"
+    echo "  --no-auto-start     Ne pas démarrer automatiquement les services"
+    echo "  --dev-mode          Mode développement (pas de sécurité renforcée)"
+    echo ""
+    echo "Exemples:"
+    echo "  $0                          # Installation standard"
+    echo "  $0 --branch main            # Installer depuis la branche main"
+    echo "  $0 --install-dir /app       # Installer dans /app"
+    echo "  $0 --dev-mode               # Mode développement"
+}
+
+# Parser les arguments de la ligne de commande
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -v|--verbose)
+                set -x
+                shift
+                ;;
+            -q|--quiet)
+                exec 1>/dev/null
+                shift
+                ;;
+            --branch)
+                BRANCH="$2"
+                shift 2
+                ;;
+            --install-dir)
+                INSTALL_DIR="$2"
+                shift 2
+                ;;
+            --skip-firewall)
+                SKIP_FIREWALL=true
+                shift
+                ;;
+            --skip-fail2ban)
+                SKIP_FAIL2BAN=true
+                shift
+                ;;
+            --no-auto-start)
+                NO_AUTO_START=true
+                shift
+                ;;
+            --dev-mode)
+                DEV_MODE=true
+                shift
+                ;;
+            *)
+                echo "Option inconnue: $1"
+                echo "Utilisez --help pour voir les options disponibles"
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# =======================
+# POINT D'ENTRÉE PRINCIPAL
+# =======================
+
+# Vérifier si le script est exécuté directement
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # Parser les arguments
+    parse_arguments "$@"
+    
+    # Ajuster la configuration selon les options
+    if [ "$DEV_MODE" = true ]; then
+        print_warning "Mode développement activé"
+        SKIP_FIREWALL=true
+        SKIP_FAIL2BAN=true
+    fi
+    
+    # Exécuter l'installation principale
     main "$@"
+    
+    # Nettoyage final
+    security_cleanup
+    
+    # Vérification avancée (optionnelle)
+    if [ "$DEV_MODE" != true ]; then
+        advanced_health_check
+    fi
+    
+    echo ""
+    echo -e "${GREEN}🎊 Installation PhishGuard BASIC terminée avec succès! 🎊${NC}"
+    echo -e "${CYAN}Merci d'avoir choisi PhishGuard pour votre sécurité informatique.${NC}"
 fi
