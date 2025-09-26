@@ -9,11 +9,13 @@ services:
       POSTGRES_DB: ${DB_NAME:-phishguard_basic}
       POSTGRES_USER: ${DB_USER:-phishguard}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./app-full/management/config:/docker-entrypoint-initdb.d:ro
+      - ./app-full/management/config/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./storage/backups:/backups
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     networks:
       - phishguard_network
     healthcheck:
@@ -26,13 +28,19 @@ services:
     image: redis:7-alpine
     container_name: phishguard_redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    command: redis-server /etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
+      - ./docker/redis/redis.conf:/etc/redis/redis.conf:ro
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     networks:
       - phishguard_network
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   app:
     build:
@@ -42,33 +50,40 @@ services:
     restart: unless-stopped
     environment:
       - DB_HOST=db
+      - DB_PORT=5432
       - DB_NAME=${DB_NAME:-phishguard_basic}
       - DB_USER=${DB_USER:-phishguard}
       - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - APP_SECRET=${APP_SECRET}
+      - TIMEZONE=${TIMEZONE:-Europe/Paris}
     volumes:
-      - ./app-full:/var/www/html
-      - ./storage:/var/www/html/storage
+      - ./app-full:/var/www/html:rw
+      - ./storage:/var/www/html/storage:rw
     networks:
       - phishguard_network
     depends_on:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
 
   nginx:
     image: nginx:1.24-alpine
     container_name: phishguard_nginx
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./app-full:/var/www/html:ro
+      - ./storage:/var/www/html/storage:rw
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./storage/ssl:/etc/nginx/ssl:ro
+      - ./storage/logs/nginx:/var/log/nginx:rw
     networks:
       - phishguard_network
     depends_on:
@@ -76,8 +91,14 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
 
 networks:
   phishguard_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1

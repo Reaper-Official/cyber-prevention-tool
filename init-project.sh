@@ -16,7 +16,7 @@ NC='\033[0m'
 # 1. CRÉATION DE LA STRUCTURE DE RÉPERTOIRES
 # ============================================================================
 
-echo -e "${BLUE}📁 Création des répertoires...${NC}"
+echo "${BLUE}📁 Création des répertoires...${NC}"
 
 # Répertoires principaux
 mkdir -p app-full/management/{api,config,includes,pages,templates,assets,src,vendor,tests}
@@ -31,7 +31,7 @@ mkdir -p storage/{logs/nginx,cache,uploads/user-imports,backups,reports/{pdf,exc
 mkdir -p scripts
 mkdir -p docs
 
-echo -e "${GREEN}✅ Structure de répertoires créée${NC}"
+echo "${GREEN}✅ Structure de répertoires créée${NC}"
 
 # ============================================================================
 # 2. FICHIERS RACINE
