@@ -1,72 +1,43 @@
 FROM php:8.2-fpm-alpine
 
-LABEL maintainer="Reaper Official <reaper@etik.com>"
-LABEL description="PhishGuard BASIC - Phishing Simulation Platform"
-
-# Installation des dépendances système
-RUN apk add --no-cache --update \
+# Installer les dépendances système nécessaires
+RUN apk add --no-cache \
     postgresql-dev \
-    redis \
-    curl \
-    git \
-    zip \
-    unzip \
-    libpng-dev \
-    libjpeg-turbo-dev \
     freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
+    libzip-dev \
     icu-dev \
-    oniguruma-dev \
     autoconf \
-    gcc \
     g++ \
     make \
-    netcat-openbsd \
+    git \
     bash
 
-# Configuration et installation des extensions PHP
+# Configurer et installer les extensions PHP
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
-        pdo \
-        pdo_pgsql \
-        pgsql \
-        gd \
-        bcmath \
-        pcntl \
-        intl \
-        mbstring
-
-# Installation de l'extension Redis
-RUN pecl channel-update pecl.php.net \
+        pdo pdo_pgsql pgsql gd bcmath pcntl intl mbstring zip \
     && pecl install redis \
-    && docker-php-ext-enable redis \
-    && pecl clear-cache
+    && docker-php-ext-enable redis
 
-# Installation de Composer
-COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
+# Installer Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www/html
+# Définir le répertoire de travail
+WORKDIR /var/www
 
-# Copie des configurations PHP
-COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-phishguard.ini
-COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/zzz-phishguard.conf
+# Copier les fichiers de l'application
+COPY . .
 
-# Copie de l'application
-COPY app-full/ /var/www/html/
+# Installer les dépendances PHP
+RUN composer install --no-dev --optimize-autoloader
 
-# Installation des dépendances Composer
-RUN if [ -f management/composer.json ]; then \
-        cd management && composer install --no-dev --optimize-autoloader --no-interaction; \
-    fi
+# Définir les permissions appropriées
+RUN chown -R www-data:www-data /var/www \
+    && chmod -R 755 /var/www/storage
 
-# Permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
-
-# Script d'initialisation
-COPY docker/init.sh /usr/local/bin/init.sh
-RUN chmod +x /usr/local/bin/init.sh
-
+# Exposer le port
 EXPOSE 9000
 
-ENTRYPOINT ["/usr/local/bin/init.sh"]
 CMD ["php-fpm"]
