@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:14-alpine
+    container_name: phishguard_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-phishguard_basic}
+      POSTGRES_USER: ${DB_USER:-phishguard}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./app-full/management/config:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - phishguard_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-phishguard} -d ${DB_NAME:-phishguard_basic}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: phishguard_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - phishguard_network
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: phishguard_app
+    restart: unless-stopped
+    environment:
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME:-phishguard_basic}
+      - DB_USER=${DB_USER:-phishguard}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - ./app-full:/var/www/html
+      - ./storage:/var/www/html/storage
+    networks:
+      - phishguard_network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  nginx:
+    image: nginx:1.24-alpine
+    container_name: phishguard_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./app-full:/var/www/html:ro
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - phishguard_network
+    depends_on:
+      - app
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  phishguard_network:
+    driver: bridge
