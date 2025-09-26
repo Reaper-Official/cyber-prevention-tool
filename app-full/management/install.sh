@@ -1,53 +1,65 @@
 #!/bin/bash
 
 #################################################
-# Script d'installation complète PhishGuard BASIC
-# Installe automatiquement tous les prérequis
+# PhishGuard BASIC - Installation Complète
+# Avec vérifications de ressources et dépendances
 #################################################
 
 set -e
 
 # Couleurs
-RED='\033[0;31m'
 GREEN='\033[0;32m'
+RED='\033[0;31m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
 NC='\033[0m'
 
+# Configuration minimale requise
+MIN_RAM_MB=1024          # 1GB minimum
+RECOMMENDED_RAM_MB=2048  # 2GB recommandé
+MIN_DISK_GB=5            # 5GB minimum
+RECOMMENDED_DISK_GB=10   # 10GB recommandé
+
 # Variables
-PROJECT_NAME="PhishGuard BASIC"
 REPO_URL="https://github.com/Reaper-Official/cyber-prevention-tool.git"
 BRANCH="dev"
-INSTALL_DIR="$(pwd)/cyber-prevention-tool"
+INSTALL_DIR="$HOME/phishguard"
+WARNINGS=()
+ERRORS=()
 
-# Fonctions utilitaires
-print_header() {
-    echo -e "\n${CYAN}════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}  $1${NC}"
-    echo -e "${CYAN}════════════════════════════════════════════════${NC}\n"
+# ==================== FONCTIONS UTILITAIRES ====================
+
+print_banner() {
+    clear
+    echo -e "${CYAN}"
+    cat << "EOF"
+╔═══════════════════════════════════════════════════════╗
+║                                                       ║
+║   ██████╗ ██╗  ██╗██╗███████╗██╗  ██╗ ██████╗       ║
+║   ██╔══██╗██║  ██║██║██╔════╝██║  ██║██╔════╝       ║
+║   ██████╔╝███████║██║███████╗███████║██║  ███╗      ║
+║   ██╔═══╝ ██╔══██║██║╚════██║██╔══██║██║   ██║      ║
+║   ██║     ██║  ██║██║███████║██║  ██║╚██████╔╝      ║
+║   ╚═╝     ╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝       ║
+║                                                       ║
+║              Installation Complète                    ║
+║                                                       ║
+╚═══════════════════════════════════════════════════════╝
+EOF
+    echo -e "${NC}\n"
 }
 
-print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
+print_section() { echo -e "\n${CYAN}═══ $1 ═══${NC}\n"; }
+print_success() { echo -e "${GREEN}✅ $1${NC}"; }
+print_error() { echo -e "${RED}❌ $1${NC}"; ERRORS+=("$1"); }
+print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; WARNINGS+=("$1"); }
+print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 
-print_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
+# ==================== DÉTECTION SYSTÈME ====================
 
-print_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-print_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
-
-# Détecter l'OS et la distribution
 detect_os() {
-    print_info "Détection du système d'exploitation..."
-    
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
@@ -57,28 +69,179 @@ detect_os() {
         OS="macos"
         OS_NAME="macOS"
         OS_VERSION=$(sw_vers -productVersion)
-    elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-        OS="linux"
-        OS_NAME="Linux"
     else
         OS="unknown"
         OS_NAME="Unknown"
     fi
-    
-    print_success "OS détecté : $OS_NAME ($OS_VERSION)"
 }
 
-# Vérifier les permissions sudo
-check_sudo() {
-    if [ "$OS" != "macos" ]; then
-        if ! sudo -n true 2>/dev/null; then
-            print_warning "Ce script nécessite les privilèges sudo"
-            sudo -v
-        fi
+# ==================== VÉRIFICATION RESSOURCES ====================
+
+check_ram() {
+    print_section "Vérification de la mémoire RAM"
+    
+    if [ "$OS" == "macos" ]; then
+        TOTAL_RAM_MB=$(($(sysctl -n hw.memsize) / 1024 / 1024))
+    else
+        TOTAL_RAM_MB=$(free -m | awk 'NR==2 {print $2}')
+    fi
+    
+    AVAILABLE_RAM_MB=$(free -m 2>/dev/null | awk 'NR==2 {print $7}' || echo $TOTAL_RAM_MB)
+    
+    echo -e "${BLUE}RAM totale     : ${MAGENTA}${TOTAL_RAM_MB}MB${NC}"
+    echo -e "${BLUE}RAM disponible : ${MAGENTA}${AVAILABLE_RAM_MB}MB${NC}"
+    echo ""
+    
+    if [ "$AVAILABLE_RAM_MB" -lt "$MIN_RAM_MB" ]; then
+        print_error "RAM insuffisante (${AVAILABLE_RAM_MB}MB < ${MIN_RAM_MB}MB requis)"
+        return 1
+    elif [ "$AVAILABLE_RAM_MB" -lt "$RECOMMENDED_RAM_MB" ]; then
+        print_warning "RAM faible (${AVAILABLE_RAM_MB}MB < ${RECOMMENDED_RAM_MB}MB recommandé)"
+        return 2
+    else
+        print_success "RAM suffisante (${AVAILABLE_RAM_MB}MB disponible)"
+        return 0
     fi
 }
 
-# Installer Git
+check_disk_space() {
+    print_section "Vérification de l'espace disque"
+    
+    AVAILABLE_DISK_GB=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
+    
+    echo -e "${BLUE}Espace disponible : ${MAGENTA}${AVAILABLE_DISK_GB}GB${NC}"
+    echo ""
+    
+    if [ "$AVAILABLE_DISK_GB" -lt "$MIN_DISK_GB" ]; then
+        print_error "Espace disque insuffisant (${AVAILABLE_DISK_GB}GB < ${MIN_DISK_GB}GB requis)"
+        return 1
+    elif [ "$AVAILABLE_DISK_GB" -lt "$RECOMMENDED_DISK_GB" ]; then
+        print_warning "Espace disque limité (${AVAILABLE_DISK_GB}GB < ${RECOMMENDED_DISK_GB}GB recommandé)"
+        return 2
+    else
+        print_success "Espace disque suffisant (${AVAILABLE_DISK_GB}GB disponible)"
+        return 0
+    fi
+}
+
+check_swap() {
+    print_section "Vérification du SWAP"
+    
+    SWAP_TOTAL=$(free -m 2>/dev/null | awk 'NR==3 {print $2}' || echo "0")
+    
+    if [ "$SWAP_TOTAL" -eq 0 ]; then
+        print_warning "Aucun SWAP configuré"
+        echo -e "${YELLOW}Un fichier SWAP est recommandé pour les systèmes avec peu de RAM${NC}"
+        
+        read -p "Voulez-vous créer un fichier SWAP de 2GB ? (oui/non) : " create_swap
+        if [ "$create_swap" = "oui" ]; then
+            create_swap_file
+        fi
+    else
+        print_success "SWAP configuré : ${SWAP_TOTAL}MB"
+    fi
+}
+
+create_swap_file() {
+    print_info "Création d'un fichier SWAP de 2GB..."
+    
+    if [ "$EUID" -ne 0 ]; then
+        print_warning "Privilèges root requis pour créer un SWAP"
+        return
+    fi
+    
+    if [ -f /swapfile ]; then
+        print_warning "Un fichier swap existe déjà"
+        return
+    fi
+    
+    sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    
+    if ! grep -q '/swapfile' /etc/fstab; then
+        echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+    fi
+    
+    print_success "SWAP de 2GB créé et activé"
+}
+
+# ==================== VÉRIFICATION DÉPENDANCES ====================
+
+check_git() {
+    print_section "Vérification de Git"
+    
+    if command -v git &> /dev/null; then
+        GIT_VERSION=$(git --version | awk '{print $3}')
+        print_success "Git installé (version ${GIT_VERSION})"
+        return 0
+    else
+        print_error "Git n'est pas installé"
+        return 1
+    fi
+}
+
+check_docker() {
+    print_section "Vérification de Docker"
+    
+    if command -v docker &> /dev/null; then
+        DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,//')
+        print_success "Docker installé (version ${DOCKER_VERSION})"
+        
+        # Vérifier que Docker fonctionne
+        if docker ps &> /dev/null; then
+            print_success "Docker est opérationnel"
+        else
+            print_error "Docker n'est pas démarré ou vous n'avez pas les permissions"
+            return 1
+        fi
+        return 0
+    else
+        print_error "Docker n'est pas installé"
+        return 1
+    fi
+}
+
+check_docker_compose() {
+    print_section "Vérification de Docker Compose"
+    
+    if docker compose version &> /dev/null 2>&1; then
+        COMPOSE_VERSION=$(docker compose version | awk '{print $4}')
+        print_success "Docker Compose (plugin) installé (${COMPOSE_VERSION})"
+        return 0
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_VERSION=$(docker-compose --version | awk '{print $4}' | sed 's/,//')
+        print_success "Docker Compose (standalone) installé (${COMPOSE_VERSION})"
+        return 0
+    else
+        print_error "Docker Compose n'est pas installé"
+        return 1
+    fi
+}
+
+check_ports() {
+    print_section "Vérification des ports"
+    
+    PORTS_OK=true
+    
+    for port in 8080 5432 6379; do
+        if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":$port "; then
+            print_warning "Port $port déjà utilisé"
+            PORTS_OK=false
+        else
+            print_success "Port $port disponible"
+        fi
+    done
+    
+    if [ "$PORTS_OK" = false ]; then
+        return 1
+    fi
+    return 0
+}
+
+# ==================== INSTALLATION DÉPENDANCES ====================
+
 install_git() {
     print_info "Installation de Git..."
     
@@ -96,209 +259,134 @@ install_git() {
         arch|manjaro)
             sudo pacman -Sy --noconfirm git
             ;;
-        opensuse*|sles)
-            sudo zypper install -y git
-            ;;
         macos)
-            if ! command -v brew &> /dev/null; then
-                print_info "Installation de Homebrew..."
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            if command -v brew &> /dev/null; then
+                brew install git
+            else
+                xcode-select --install
             fi
-            brew install git
             ;;
         *)
-            print_error "Distribution non supportée pour l'installation automatique de Git"
-            exit 1
+            print_error "OS non supporté pour l'installation automatique de Git"
+            return 1
             ;;
     esac
     
-    print_success "Git installé : $(git --version)"
+    print_success "Git installé avec succès"
 }
 
-# Installer Docker
 install_docker() {
     print_info "Installation de Docker..."
     
     case "$OS" in
-        ubuntu|debian|pop)
-            # Supprimer les anciennes versions
-            sudo apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
-            
-            # Installer les dépendances
-            sudo apt-get update -qq
-            sudo apt-get install -y \
-                ca-certificates \
-                curl \
-                gnupg \
-                lsb-release
-            
-            # Ajouter la clé GPG de Docker
-            sudo install -m 0755 -d /etc/apt/keyrings
-            curl -fsSL https://download.docker.com/linux/$OS/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-            sudo chmod a+r /etc/apt/keyrings/docker.gpg
-            
-            # Ajouter le repository Docker
-            echo \
-              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$OS \
-              $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-            
-            # Installer Docker Engine
-            sudo apt-get update -qq
-            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        ubuntu|debian|pop|centos|rhel|fedora)
+            curl -fsSL https://get.docker.com | sudo sh
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker $USER
             ;;
-            
-        centos|rhel|rocky|alma)
-            sudo yum install -y yum-utils
-            sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-            sudo yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-            ;;
-            
-        fedora)
-            sudo dnf -y install dnf-plugins-core
-            sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
-            sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-            ;;
-            
-        arch|manjaro)
-            sudo pacman -Sy --noconfirm docker docker-compose
-            ;;
-            
-        opensuse*|sles)
-            sudo zypper addrepo https://download.docker.com/linux/sles/docker-ce.repo
-            sudo zypper refresh
-            sudo zypper install -y docker-ce docker-ce-cli containerd.io
-            ;;
-            
         macos)
-            if command -v brew &> /dev/null; then
-                print_info "Installation de Docker Desktop pour macOS..."
-                brew install --cask docker
-                print_warning "Docker Desktop installé. Veuillez le démarrer manuellement depuis Applications."
-                print_info "Appuyez sur Entrée après avoir démarré Docker Desktop..."
-                read
-            else
-                print_error "Homebrew n'est pas installé"
-                print_info "Téléchargez Docker Desktop depuis : https://www.docker.com/products/docker-desktop"
-                exit 1
-            fi
+            print_error "Installez Docker Desktop depuis https://www.docker.com/products/docker-desktop"
+            return 1
             ;;
-            
         *)
-            print_error "Distribution non supportée pour l'installation automatique de Docker"
-            print_info "Installez Docker manuellement : https://docs.docker.com/engine/install/"
-            exit 1
+            print_error "OS non supporté"
+            return 1
             ;;
     esac
     
-    # Démarrer et activer Docker (Linux seulement)
-    if [ "$OS" != "macos" ]; then
-        sudo systemctl start docker 2>/dev/null || true
-        sudo systemctl enable docker 2>/dev/null || true
-    fi
-    
-    # Ajouter l'utilisateur au groupe docker (Linux seulement)
-    if [ "$OS" != "macos" ]; then
-        sudo usermod -aG docker $USER
-        print_warning "Vous avez été ajouté au groupe 'docker'"
-    fi
-    
-    print_success "Docker installé : $(docker --version)"
+    print_success "Docker installé"
+    print_warning "Vous devrez peut-être vous reconnecter pour que les changements prennent effet"
 }
 
-# Installer Docker Compose (si nécessaire)
 install_docker_compose() {
-    # Vérifier si docker compose (plugin) existe
-    if docker compose version &> /dev/null; then
+    print_info "Installation de Docker Compose..."
+    
+    if docker compose version &> /dev/null 2>&1; then
         print_success "Docker Compose (plugin) déjà disponible"
-        return
+        return 0
     fi
     
-    # Vérifier si docker-compose standalone existe
-    if command -v docker-compose &> /dev/null; then
-        print_success "Docker Compose (standalone) déjà disponible"
-        return
-    fi
-    
-    print_info "Installation de Docker Compose standalone..."
-    
-    # Obtenir la dernière version
     COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
     
     if [ "$OS" == "macos" ]; then
         brew install docker-compose
     else
-        sudo curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
-             -o /usr/local/bin/docker-compose
+        sudo curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
         sudo chmod +x /usr/local/bin/docker-compose
     fi
     
     print_success "Docker Compose installé"
 }
 
-# Vérifier et installer tous les prérequis
-setup_prerequisites() {
-    print_header "Configuration des prérequis"
+# ==================== RÉSUMÉ ET CONFIRMATION ====================
+
+show_summary() {
+    print_section "Résumé de la vérification"
     
-    detect_os
+    echo -e "${CYAN}📊 Configuration système :${NC}"
+    echo -e "   OS           : ${OS_NAME}"
+    echo -e "   RAM totale   : ${TOTAL_RAM_MB}MB"
+    echo -e "   RAM dispo    : ${AVAILABLE_RAM_MB}MB"
+    echo -e "   Espace disque: ${AVAILABLE_DISK_GB}GB"
+    echo ""
     
-    if [ "$OS" != "macos" ]; then
-        check_sudo
+    if [ ${#ERRORS[@]} -gt 0 ]; then
+        echo -e "${RED}❌ Erreurs critiques :${NC}"
+        for error in "${ERRORS[@]}"; do
+            echo -e "   - $error"
+        done
+        echo ""
     fi
     
-    # Vérifier et installer Git
-    if ! command -v git &> /dev/null; then
-        install_git
+    if [ ${#WARNINGS[@]} -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  Avertissements :${NC}"
+        for warning in "${WARNINGS[@]}"; do
+            echo -e "   - $warning"
+        done
+        echo ""
+    fi
+    
+    if [ ${#ERRORS[@]} -eq 0 ] && [ ${#WARNINGS[@]} -eq 0 ]; then
+        echo -e "${GREEN}✅ Tous les prérequis sont satisfaits !${NC}\n"
+        return 0
+    elif [ ${#ERRORS[@]} -gt 0 ]; then
+        echo -e "${RED}⛔ Installation impossible en raison d'erreurs critiques${NC}\n"
+        return 2
     else
-        print_success "Git déjà installé : $(git --version)"
+        echo -e "${YELLOW}⚠️  Des avertissements ont été détectés${NC}\n"
+        return 1
     fi
-    
-    # Vérifier et installer Docker
-    if ! command -v docker &> /dev/null; then
-        install_docker
-        DOCKER_INSTALLED=true
-    else
-        print_success "Docker déjà installé : $(docker --version)"
-        
-        # Vérifier si l'utilisateur est dans le groupe docker (Linux)
-        if [ "$OS" != "macos" ] && ! groups | grep -q docker; then
-            print_warning "Ajout de l'utilisateur au groupe docker..."
-            sudo usermod -aG docker $USER
-            DOCKER_INSTALLED=true
-        fi
-    fi
-    
-    # Installer Docker Compose si nécessaire
-    install_docker_compose
-    
-    # Si Docker vient d'être installé sur Linux, gérer la reconnexion
-    if [ "$DOCKER_INSTALLED" = true ] && [ "$OS" != "macos" ]; then
-        print_warning "Docker vient d'être installé et vous avez été ajouté au groupe 'docker'"
-        print_info "Tentative d'activation du groupe docker sans reconnexion..."
-        
-        # Essayer de continuer avec newgrp
-        if command -v sg &> /dev/null; then
-            exec sg docker "$0 --continue"
-        else
-            print_warning "Pour que les changements prennent effet :"
-            echo -e "${YELLOW}1. Déconnectez-vous et reconnectez-vous${NC}"
-            echo -e "${YELLOW}2. OU exécutez : newgrp docker${NC}"
-            echo -e "${YELLOW}3. Puis relancez ce script${NC}"
-            exit 0
-        fi
-    fi
-    
-    print_success "Tous les prérequis sont installés !"
 }
 
-# Cloner le repository
+ask_confirmation() {
+    local status=$1
+    
+    if [ $status -eq 0 ]; then
+        read -p "Continuer l'installation ? (oui/non) : " confirm
+    elif [ $status -eq 1 ]; then
+        echo -e "${YELLOW}L'installation peut être instable avec ces ressources limitées.${NC}"
+        read -p "Voulez-vous prendre le risque et continuer ? (oui/non) : " confirm
+    else
+        echo -e "${RED}Veuillez résoudre les erreurs avant de continuer.${NC}"
+        exit 1
+    fi
+    
+    if [ "$confirm" != "oui" ]; then
+        print_info "Installation annulée par l'utilisateur"
+        exit 0
+    fi
+}
+
+# ==================== INSTALLATION ====================
+
 clone_repository() {
-    print_header "Clonage du repository"
+    print_section "Clonage du repository depuis GitHub"
     
     if [ -d "$INSTALL_DIR" ]; then
-        print_warning "Le dossier existe déjà"
-        read -p "Voulez-vous le supprimer et recommencer ? (oui/non) : " confirm
-        if [ "$confirm" = "oui" ]; then
+        print_warning "Le dossier $INSTALL_DIR existe déjà"
+        read -p "Supprimer et réinstaller ? (oui/non) : " choice
+        if [ "$choice" = "oui" ]; then
             rm -rf "$INSTALL_DIR"
         else
             print_info "Utilisation du dossier existant"
@@ -307,173 +395,175 @@ clone_repository() {
         fi
     fi
     
-    print_info "Clonage de $REPO_URL (branche: $BRANCH)..."
-    git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+    print_info "Clonage depuis $REPO_URL (branche: $BRANCH)..."
+    git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
+    print_success "Repository cloné depuis GitHub"
     
-    print_success "Repository cloné avec succès"
+    # Afficher le contenu récupéré
+    print_info "Contenu du repository :"
+    ls -la | head -20
 }
 
-# Créer le Dockerfile
-create_dockerfile() {
-    print_header "Création du Dockerfile optimisé"
+verify_repository_structure() {
+    print_section "Vérification de la structure du projet"
     
-    cat > Dockerfile << 'DOCKERFILE_EOF'
+    # Vérifier les fichiers essentiels depuis le repo
+    local files_ok=true
+    
+    echo "Vérification des fichiers du repository :"
+    
+    # Fichiers Laravel/PHP attendus
+    if [ -f "composer.json" ]; then
+        print_success "composer.json trouvé"
+    else
+        print_warning "composer.json non trouvé"
+    fi
+    
+    if [ -f "artisan" ]; then
+        print_success "artisan trouvé (Laravel détecté)"
+    else
+        print_warning "artisan non trouvé (pas Laravel)"
+    fi
+    
+    # Vérifier si les fichiers Docker existent déjà
+    if [ -f "Dockerfile" ]; then
+        print_success "Dockerfile trouvé dans le repo"
+    else
+        print_info "Dockerfile non trouvé, sera créé"
+    fi
+    
+    if [ -f "docker-compose.yml" ]; then
+        print_success "docker-compose.yml trouvé dans le repo"
+    else
+        print_info "docker-compose.yml non trouvé, sera créé"
+    fi
+}
+
+setup_docker_files() {
+    print_section "Configuration des fichiers Docker"
+    
+    # Utiliser les fichiers du repo s'ils existent, sinon les créer
+    if [ ! -f "Dockerfile" ]; then
+        print_info "Création du Dockerfile..."
+        cat > Dockerfile << 'DOCKERFILE'
 FROM php:8.2-fpm-alpine
-
-RUN apk add --no-cache \
-    bash git curl \
-    postgresql-dev postgresql-libs \
-    freetype-dev libjpeg-turbo-dev libpng-dev \
-    libzip-dev icu-dev icu-libs \
-    oniguruma-dev linux-headers \
-    autoconf g++ make pkgconf
-
+RUN apk add --no-cache bash git curl postgresql-dev postgresql-libs \
+    freetype-dev libjpeg-turbo-dev libpng-dev libzip-dev icu-dev icu-libs \
+    oniguruma-dev linux-headers autoconf g++ make pkgconf
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg && \
-    docker-php-ext-install -j$(nproc) \
-        pdo pdo_pgsql pgsql gd bcmath pcntl intl mbstring zip
-
-RUN pecl install redis-5.3.7 && \
-    docker-php-ext-enable redis && \
-    php -m | grep -i redis
-
-RUN apk del autoconf g++ make pkgconf
-
+    docker-php-ext-install -j$(nproc) pdo pdo_pgsql pgsql gd bcmath pcntl intl mbstring zip
+RUN pecl install redis-5.3.7 && docker-php-ext-enable redis
+RUN apk del autoconf g++ make pkgconf && rm -rf /tmp/* /var/cache/apk/*
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
 WORKDIR /var/www
 COPY . .
-
 RUN if [ -f composer.json ]; then \
-        composer install --no-dev --optimize-autoloader --no-interaction; \
+        COMPOSER_MEMORY_LIMIT=-1 composer install --no-dev --optimize-autoloader --no-cache; \
     fi
-
-RUN chown -R www-data:www-data /var/www && \
-    chmod -R 755 /var/www
-
+RUN chown -R www-data:www-data /var/www
 EXPOSE 9000
 CMD ["php-fpm"]
-DOCKERFILE_EOF
+DOCKERFILE
+        print_success "Dockerfile créé"
+    else
+        print_success "Utilisation du Dockerfile du repository"
+    fi
     
-    print_success "Dockerfile créé"
-}
-
-# Créer docker-compose.yml
-create_docker_compose() {
-    print_header "Création de docker-compose.yml"
-    
-    cat > docker-compose.yml << 'COMPOSE_EOF'
+    if [ ! -f "docker-compose.yml" ]; then
+        print_info "Création du docker-compose.yml..."
+        cat > docker-compose.yml << 'COMPOSE'
 version: '3.8'
-
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: phishguard_app
     restart: unless-stopped
     working_dir: /var/www
-    volumes:
-      - ./:/var/www
-    networks:
-      - phishguard_network
-    depends_on:
-      - db
-      - redis
-
+    volumes: [./:/var/www]
+    networks: [phishguard]
+    depends_on: [db, redis]
+    mem_limit: 512m
   nginx:
     image: nginx:alpine
     container_name: phishguard_nginx
     restart: unless-stopped
-    ports:
-      - "8080:80"
-    volumes:
-      - ./:/var/www
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-    networks:
-      - phishguard_network
-    depends_on:
-      - app
-
+    ports: ["8080:80"]
+    volumes: [./:/var/www, ./nginx/default.conf:/etc/nginx/conf.d/default.conf]
+    networks: [phishguard]
+    depends_on: [app]
+    mem_limit: 128m
   db:
     image: postgres:14-alpine
     container_name: phishguard_db
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${DB_DATABASE:-phishguard}
-      POSTGRES_USER: ${DB_USERNAME:-phishguard_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret_password}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - phishguard_network
-
+    environment: {POSTGRES_DB: phishguard, POSTGRES_USER: phishguard_user, POSTGRES_PASSWORD: secret_password}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [phishguard]
+    mem_limit: 256m
   redis:
     image: redis:7-alpine
     container_name: phishguard_redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - phishguard_network
-
+    volumes: [redis_data:/data]
+    networks: [phishguard]
+    mem_limit: 128m
 networks:
-  phishguard_network:
-    driver: bridge
-
+  phishguard:
 volumes:
   postgres_data:
   redis_data:
-COMPOSE_EOF
+COMPOSE
+        print_success "docker-compose.yml créé"
+    else
+        print_success "Utilisation du docker-compose.yml du repository"
+    fi
     
-    print_success "docker-compose.yml créé"
-}
-
-# Créer configuration Nginx
-create_nginx_config() {
-    print_header "Création de la configuration Nginx"
-    
-    mkdir -p nginx
-    
-    cat > nginx/default.conf << 'NGINX_EOF'
+    # Configuration Nginx
+    if [ ! -d "nginx" ] || [ ! -f "nginx/default.conf" ]; then
+        print_info "Création de la configuration Nginx..."
+        mkdir -p nginx
+        cat > nginx/default.conf << 'NGINX'
 server {
     listen 80;
-    server_name localhost;
     root /var/www/public;
     index index.php index.html;
-
     client_max_body_size 100M;
-
+    
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
-
+    
     location ~ \.php$ {
+        try_files $uri =404;
         fastcgi_pass app:9000;
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
     }
-
+    
     location ~ /\.(?!well-known).* {
         deny all;
     }
 }
-NGINX_EOF
-    
-    print_success "Configuration Nginx créée"
+NGINX
+        print_success "Configuration Nginx créée"
+    else
+        print_success "Utilisation de la configuration Nginx du repository"
+    fi
 }
 
-# Créer fichier .env
-create_env_file() {
-    print_header "Configuration de l'environnement"
+setup_environment() {
+    print_section "Configuration de l'environnement"
     
-    if [ -f .env.example ]; then
+    # Utiliser .env.example du repo ou créer un .env
+    if [ -f ".env.example" ] && [ ! -f ".env" ]; then
+        print_info "Copie de .env.example vers .env..."
         cp .env.example .env
-        print_success "Fichier .env créé depuis .env.example"
-    else
-        cat > .env << 'ENV_EOF'
+        print_success ".env créé depuis .env.example"
+    elif [ ! -f ".env" ]; then
+        print_info "Création du fichier .env..."
+        cat > .env << 'ENV'
 APP_NAME="PhishGuard BASIC"
 APP_ENV=local
 APP_KEY=
@@ -488,125 +578,196 @@ DB_USERNAME=phishguard_user
 DB_PASSWORD=secret_password
 
 REDIS_HOST=redis
-REDIS_PASSWORD=null
 REDIS_PORT=6379
 
 GEMINI_API_KEY=your_gemini_api_key_here
-ENV_EOF
-        print_success "Fichier .env créé"
+ENV
+        print_success ".env créé"
+    else
+        print_success ".env existe déjà"
     fi
 }
 
-# Construction et démarrage
 build_and_start() {
-    print_header "Construction et démarrage"
+    print_section "Construction et démarrage de l'application"
+    
+    # Déterminer la commande docker-compose
+    if docker compose version &> /dev/null 2>&1; then
+        COMPOSE_CMD="docker compose"
+    else
+        COMPOSE_CMD="docker-compose"
+    fi
     
     print_info "Construction des images Docker (cela peut prendre plusieurs minutes)..."
+    $COMPOSE_CMD build --no-cache
     
-    # Utiliser la bonne commande docker compose
-    if docker compose version &> /dev/null; then
-        DOCKER_COMPOSE="docker compose"
-    else
-        DOCKER_COMPOSE="docker-compose"
-    fi
-    
-    $DOCKER_COMPOSE build --no-cache
-    
-    print_success "Images construites"
+    print_success "Images Docker construites"
     
     print_info "Démarrage des conteneurs..."
-    $DOCKER_COMPOSE up -d
+    $COMPOSE_CMD up -d
     
     print_success "Conteneurs démarrés"
+    
+    # Attendre que les services démarrent
+    print_info "Attente du démarrage des services (20 secondes)..."
+    sleep 20
+    
+    # Vérifier l'état des conteneurs
+    print_info "État des conteneurs :"
+    $COMPOSE_CMD ps
 }
 
-# Initialisation
-initialize_app() {
-    print_header "Initialisation de l'application"
+initialize_application() {
+    print_section "Initialisation de l'application"
     
-    print_info "Attente du démarrage des services (15 secondes)..."
-    sleep 15
-    
-    if docker compose version &> /dev/null; then
-        DOCKER_COMPOSE="docker compose"
+    # Déterminer la commande docker-compose
+    if docker compose version &> /dev/null 2>&1; then
+        COMPOSE_CMD="docker compose"
     else
-        DOCKER_COMPOSE="docker-compose"
+        COMPOSE_CMD="docker-compose"
     fi
     
-    if [ -f artisan ]; then
-        print_info "Génération de la clé Laravel..."
-        $DOCKER_COMPOSE exec -T app php artisan key:generate 2>/dev/null || true
+    # Si c'est une application Laravel
+    if [ -f "artisan" ]; then
+        print_info "Application Laravel détectée, initialisation..."
         
-        print_info "Exécution des migrations..."
-        $DOCKER_COMPOSE exec -T app php artisan migrate --force 2>/dev/null || true
+        # Générer la clé d'application
+        print_info "Génération de la clé d'application..."
+        $COMPOSE_CMD exec -T app php artisan key:generate 2>/dev/null || true
         
-        print_info "Seed de la base de données..."
-        $DOCKER_COMPOSE exec -T app php artisan db:seed --force 2>/dev/null || true
+        # Créer les dossiers de stockage si nécessaire
+        $COMPOSE_CMD exec -T app mkdir -p storage/framework/{cache,sessions,views} 2>/dev/null || true
+        $COMPOSE_CMD exec -T app mkdir -p storage/logs 2>/dev/null || true
+        $COMPOSE_CMD exec -T app chmod -R 775 storage bootstrap/cache 2>/dev/null || true
         
-        print_success "Application initialisée"
+        # Exécuter les migrations
+        print_info "Exécution des migrations de base de données..."
+        $COMPOSE_CMD exec -T app php artisan migrate --force 2>/dev/null || true
+        
+        # Seed de la base de données (optionnel)
+        read -p "Voulez-vous insérer des données de test ? (oui/non) : " seed_choice
+        if [ "$seed_choice" = "oui" ]; then
+            print_info "Insertion des données de test..."
+            $COMPOSE_CMD exec -T app php artisan db:seed --force 2>/dev/null || true
+        fi
+        
+        print_success "Application Laravel initialisée"
+    else
+        print_warning "Pas d'application Laravel détectée"
+        
+        # Créer une page de test si pas de public/index.php
+        if [ ! -f "public/index.php" ]; then
+            print_info "Création d'une page de test..."
+            mkdir -p public
+            cat > public/index.php << 'PHPTEST'
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard BASIC</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            background: rgba(255,255,255,0.1);
+            padding: 60px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { font-size: 56px; margin-bottom: 20px; }
+        .status { 
+            background: rgba(76, 175, 80, 0.3);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 30px 0;
+        }
+        .info { font-size: 18px; opacity: 0.9; }
+        .emoji { font-size: 72px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="emoji">🛡️</div>
+        <h1>PhishGuard BASIC</h1>
+        <div class="status">
+            <h2>✅ Installation réussie !</h2>
+            <p class="info">L'application est opérationnelle</p>
+        </div>
+        <p class="info">
+            <?php
+            echo "PHP " . phpversion() . " | ";
+            echo "Services Docker actifs";
+            ?>
+        </p>
+    </div>
+</body>
+</html>
+PHPTEST
+            print_success "Page de test créée"
+        fi
     fi
+    
+    # Permissions finales
+    print_info "Application des permissions finales..."
+    $COMPOSE_CMD exec -T app chown -R www-data:www-data /var/www 2>/dev/null || true
+    $COMPOSE_CMD exec -T app chmod -R 755 /var/www/storage 2>/dev/null || true
+    
+    print_success "Application initialisée"
 }
 
-# Afficher les infos finales
-show_info() {
-    print_header "Installation terminée !"
+show_final_info() {
+    print_section "Installation terminée !"
     
     echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║  🎉 PhishGuard BASIC installé !       ║${NC}"
+    echo -e "${GREEN}║  ✅ PhishGuard BASIC installé !       ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
-    
-    echo -e "\n${CYAN}🌐 Accès :${NC} ${GREEN}http://localhost:8080${NC}"
-    
-    echo -e "\n${CYAN}📝 Configuration :${NC}"
-    echo -e "   Éditez : ${BLUE}$INSTALL_DIR/.env${NC}"
-    echo -e "   Ajoutez votre clé API Gemini"
-    
-    echo -e "\n${CYAN}🔧 Commandes utiles :${NC}"
-    echo -e "   ${BLUE}cd $INSTALL_DIR${NC}"
-    echo -e "   ${BLUE}docker-compose logs -f${NC}"
-    echo -e "   ${BLUE}docker-compose ps${NC}"
-    echo -e "   ${BLUE}docker-compose restart${NC}"
+    echo ""
+    echo -e "${CYAN}🌐 URL : ${GREEN}http://localhost:8080${NC}"
+    echo -e "${CYAN}📂 Dossier : ${GREEN}$INSTALL_DIR${NC}"
+    echo ""
 }
 
-# Main
+# ==================== MAIN ====================
+
 main() {
-    clear
-    echo -e "${CYAN}"
-    cat << "BANNER_EOF"
-╔═══════════════════════════════════════════════════════╗
-║                                                       ║
-║   ██████╗ ██╗  ██╗██╗███████╗██╗  ██╗ ██████╗       ║
-║   ██╔══██╗██║  ██║██║██╔════╝██║  ██║██╔════╝       ║
-║   ██████╔╝███████║██║███████╗███████║██║  ███╗      ║
-║   ██╔═══╝ ██╔══██║██║╚════██║██╔══██║██║   ██║      ║
-║   ██║     ██║  ██║██║███████║██║  ██║╚██████╔╝      ║
-║   ╚═╝     ╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝       ║
-║                                                       ║
-║        Installation Automatique Complète             ║
-║                                                       ║
-╚═══════════════════════════════════════════════════════╝
-BANNER_EOF
-    echo -e "${NC}\n"
+    print_banner
     
-    # Si l'argument --continue est passé, sauter la vérification des prérequis
-    if [ "$1" != "--continue" ]; then
-        setup_prerequisites
-    fi
+    detect_os
+    print_info "Système détecté : $OS_NAME"
+    echo ""
     
+    # Vérifications des ressources
+    check_ram; RAM_STATUS=$?
+    check_disk_space; DISK_STATUS=$?
+    check_swap
+    
+    # Vérifications des dépendances
+    check_git || install_git
+    check_docker || install_docker
+    check_docker_compose || install_docker_compose
+    check_ports
+    
+    # Résumé et confirmation
+    show_summary; SUMMARY_STATUS=$?
+    ask_confirmation $SUMMARY_STATUS
+    
+    # Installation
     clone_repository
-    create_dockerfile
-    create_docker_compose
-    create_nginx_config
-    create_env_file
+    create_docker_files
     build_and_start
     initialize_app
-    show_info
-    
-    echo -e "\n${GREEN}✨ Installation terminée avec succès !${NC}\n"
+    show_final_info
 }
 
-# Gestion des erreurs
-trap 'print_error "Une erreur est survenue à la ligne $LINENO"; exit 1' ERR
-
-# Exécution
 main "$@"
