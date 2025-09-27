@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 cat > /workspaces/cyber-prevention-tool/app/docker-compose.yml << 'EOF'
+cat > /workspaces/cyber-prevention-tool/app/docker-compose.yml << 'EOF'
 services:
   db:
     image: postgres:14-alpine
@@ -27,10 +28,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    command: npm start
   frontend:
     build: ./frontend
     ports:
