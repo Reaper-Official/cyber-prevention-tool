@@ -1,20 +1,49 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+
 const prisma = new PrismaClient();
+
 async function main() {
+  // Créer le rôle Admin
   const adminRole = await prisma.role.upsert({
     where: { name: 'Admin' },
     update: {},
-    create: { name: 'Admin', permissions: { users: ['create', 'read'], campaigns: ['create', 'read'] } }
+    create: { 
+      name: 'Admin', 
+      permissions: { 
+        users: ['create', 'read', 'update', 'delete'], 
+        campaigns: ['create', 'read', 'update', 'delete'] 
+      } 
+    }
   });
+
+  console.log('✅ Role created:', adminRole);
+
+  // Créer l'utilisateur admin
   const password = process.env.DEFAULT_ADMIN_PASSWORD || 'ChangeMe123!';
   const hashed = await bcrypt.hash(password, 12);
-  await prisma.user.upsert({
+
+  const adminUser = await prisma.user.upsert({
     where: { email: 'admin@local.test' },
     update: {},
-    create: { email: 'admin@local.test', password: hashed, firstName: 'Admin', roleId: adminRole.id }
+    create: { 
+      email: 'admin@local.test', 
+      password: hashed, 
+      firstName: 'Admin',
+      roleId: adminRole.id 
+    }
   });
-  console.log('✅ Admin: admin@local.test');
-  console.log(`   Admin password: ${password}`);
+
+  console.log('✅ Admin user created:', adminUser.email);
+  console.log('📧 Email: admin@local.test');
+  console.log('🔑 Password:', password);
 }
-main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());
+
+main()
+  .catch((e) => {
+    console.error('❌ Seed error:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
