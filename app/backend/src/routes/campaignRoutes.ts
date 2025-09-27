@@ -74,18 +74,21 @@ router.get('/:id', async (req, res, next) => {
     if (!campaign) throw new AppError(404, 'Campaign not found');
     
     // Calculer les statistiques
+    const clickCount = campaign.targets.filter(t => t.status === 'clicked').length;
+    const openCount = campaign.targets.filter(t => ['opened', 'clicked'].includes(t.status)).length;
+    
     const stats = {
       total: campaign.targets.length,
       pending: campaign.targets.filter(t => t.status === 'pending').length,
       sent: campaign.targets.filter(t => t.status === 'sent').length,
-      opened: campaign.targets.filter(t => t.status === 'opened').length,
-      clicked: campaign.targets.filter(t => t.status === 'clicked').length,
+      opened: openCount,
+      clicked: clickCount,
       clickRate: campaign.targets.length > 0 
-        ? ((campaign.targets.filter(t => t.status === 'clicked').length / campaign.targets.length) * 100).toFixed(1)
-        : 0,
+        ? ((clickCount / campaign.targets.length) * 100).toFixed(1)
+        : '0',
       openRate: campaign.targets.length > 0
-        ? ((campaign.targets.filter(t => ['opened', 'clicked'].includes(t.status)).length / campaign.targets.length) * 100).toFixed(1)
-        : 0
+        ? ((openCount / campaign.targets.length) * 100).toFixed(1)
+        : '0'
     };
     
     res.json({ ...campaign, stats });
@@ -94,7 +97,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// Lancer une campagne (passer de draft à published)
+// Lancer une campagne
 router.post('/:id/launch', async (req, res, next) => {
   try {
     const campaign = await prisma.campaign.findUnique({
@@ -106,7 +109,6 @@ router.post('/:id/launch', async (req, res, next) => {
     if (campaign.status !== 'draft') throw new AppError(400, 'Campaign already launched');
     if (campaign.targets.length === 0) throw new AppError(400, 'No targets defined');
     
-    // Mettre à jour le statut de la campagne
     const updated = await prisma.campaign.update({
       where: { id: req.params.id },
       data: { 
@@ -115,7 +117,6 @@ router.post('/:id/launch', async (req, res, next) => {
       }
     });
     
-    // Marquer tous les targets comme "sent" (simulation d'envoi)
     await prisma.campaignTarget.updateMany({
       where: { campaignId: req.params.id },
       data: { status: 'sent' }
@@ -130,7 +131,7 @@ router.post('/:id/launch', async (req, res, next) => {
   }
 });
 
-// Tracking - Ouverture d'email (pixel tracker)
+// Tracking - Ouverture d'email
 router.get('/track/open/:trackingId', async (req, res, next) => {
   try {
     const { trackingId } = req.params;
@@ -146,7 +147,6 @@ router.get('/track/open/:trackingId', async (req, res, next) => {
       }
     });
     
-    // Retourner un pixel transparent 1x1
     const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
     res.type('image/gif').send(pixel);
   } catch (error) {
@@ -159,16 +159,14 @@ router.get('/track/click/:trackingId', async (req, res, next) => {
   try {
     const { trackingId } = req.params;
     
-    const target = await prisma.campaignTarget.update({
+    await prisma.campaignTarget.update({
       where: { trackingId },
       data: { 
         status: 'clicked',
         clickedAt: new Date()
-      },
-      include: { campaign: true, user: true }
+      }
     });
     
-    // Rediriger vers une page d'information
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -195,7 +193,6 @@ router.get('/track/click/:trackingId', async (req, res, next) => {
             <li>Report suspicious emails to IT</li>
           </ul>
         </div>
-        <p><a href="/">Return to dashboard</a></p>
       </body>
       </html>
     `);
@@ -204,7 +201,7 @@ router.get('/track/click/:trackingId', async (req, res, next) => {
   }
 });
 
-// Rapport détaillé d'une campagne
+// Rapport détaillé
 router.get('/:id/report', async (req, res, next) => {
   try {
     const campaign = await prisma.campaign.findUnique({
@@ -225,21 +222,21 @@ router.get('/:id/report', async (req, res, next) => {
     
     if (!campaign) throw new AppError(404, 'Campaign not found');
     
+    const clickCount = campaign.targets.filter(t => t.status === 'clicked').length;
+    const clickRateNum = campaign.targets.length > 0 ? (clickCount / campaign.targets.length) * 100 : 0;
+    
     const stats = {
       total: campaign.targets.length,
       pending: campaign.targets.filter(t => t.status === 'pending').length,
       sent: campaign.targets.filter(t => t.status === 'sent').length,
       opened: campaign.targets.filter(t => t.status === 'opened').length,
-      clicked: campaign.targets.filter(t => t.status === 'clicked').length,
-      clickRate: campaign.targets.length > 0 
-        ? ((campaign.targets.filter(t => t.status === 'clicked').length / campaign.targets.length) * 100).toFixed(1)
-        : 0,
+      clicked: clickCount,
+      clickRate: clickRateNum.toFixed(1),
       openRate: campaign.targets.length > 0
         ? ((campaign.targets.filter(t => ['opened', 'clicked'].includes(t.status)).length / campaign.targets.length) * 100).toFixed(1)
-        : 0
+        : '0'
     };
     
-    // Grouper par statut
     const targetsByStatus = {
       pending: campaign.targets.filter(t => t.status === 'pending'),
       sent: campaign.targets.filter(t => t.status === 'sent'),
@@ -258,7 +255,7 @@ router.get('/:id/report', async (req, res, next) => {
       },
       stats,
       targetsByStatus,
-      recommendations: stats.clickRate > 20 ? [
+      recommendations: clickRateNum > 20 ? [
         'Click rate is high - consider additional training',
         'Review email templates for suspicious indicators',
         'Schedule follow-up training sessions'
