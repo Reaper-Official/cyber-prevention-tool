@@ -4,8 +4,8 @@ cd /workspaces/cyber-prevention-tool/app
 docker compose down -v
 docker rmi app-backend app-frontend 2>/dev/null || true
 
-# Rebuild sans cache
-docker compose build --no-cache
+docker compose build --no-cache frontend
+docker compose up -d
 
 # Démarrer
 docker compose up -d
