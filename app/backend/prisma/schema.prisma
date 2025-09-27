@@ -1,16 +1,19 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String
   firstName String?
-  lastName String?
+  lastName  String?
   roleId    String
   role      Role     @relation(fields: [roleId], references: [id])
   active    Boolean  @default(true)
@@ -18,12 +21,14 @@ model User {
   campaignsCreated Campaign[] @relation("CampaignCreator")
   campaignTargets  CampaignTarget[]
 }
+
 model Role {
   id          String   @id @default(uuid())
   name        String   @unique
   permissions Json     @default("{}")
   users       User[]
 }
+
 model Campaign {
   id          String   @id @default(uuid())
   name        String
@@ -38,6 +43,7 @@ model Campaign {
   createdAt   DateTime @default(now())
   targets     CampaignTarget[]
 }
+
 model CampaignTarget {
   id          String   @id @default(uuid())
   campaignId  String
