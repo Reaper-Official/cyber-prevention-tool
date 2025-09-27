@@ -5,6 +5,8 @@ import { Layout } from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import CampaignsPage from './pages/CampaignsPage';
+import CreateCampaignPage from './pages/CreateCampaignPage';
+
 function App() {
   return (
     <BrowserRouter>
@@ -22,4 +24,5 @@ function App() {
     </BrowserRouter>
   );
 }
+
 export default App;
