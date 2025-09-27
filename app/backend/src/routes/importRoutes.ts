@@ -20,7 +20,7 @@ router.post('/employees', async (req, res, next) => {
     const results = {
       departmentsCreated: 0,
       employeesCreated: 0,
-      errors: []
+      errors: [] as string[]
     };
 
     // Obtenir le rôle Employee par défaut
