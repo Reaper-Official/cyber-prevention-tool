@@ -1,1 +1,3 @@
-cp /workspaces/cyber-prevention-tool/app/.env.example /workspaces/cyber-prevention-tool/app/.env
+docker compose exec backend npx prisma db push
+sleep 10
+docker compose exec backend npx ts-node prisma/seed.ts
