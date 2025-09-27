@@ -142,32 +142,23 @@ if [ ! -f .env ]; then
   echo "✅ .env créé (JWT_SECRET généré)"
 fi
 
-# Generate package-lock.json files if missing
-echo "📦 Génération des package-lock.json..."
-if [ ! -f backend/package-lock.json ]; then
-  (cd backend && npm install --package-lock-only)
-fi
-if [ ! -f frontend/package-lock.json ]; then
-  (cd frontend && npm install --package-lock-only)
-fi
-
 echo "🐳 Lancement via docker compose..."
-docker compose down -v 2>/dev/null || true
-docker compose up -d --build
+docker compose down -v 2>/dev/null || docker-compose down -v 2>/dev/null || true
+docker compose up -d --build || docker-compose up -d --build
 
 echo "⏳ Attente du backend..."
 sleep 20
 
 echo "⚙️ Exécution des migrations Prisma..."
-docker compose exec -T backend npx prisma migrate deploy || {
+docker compose exec -T backend npx prisma migrate deploy || docker-compose exec -T backend npx prisma migrate deploy || {
   echo "⚠️ Migration failed, trying dev mode"
-  docker compose exec -T backend npx prisma migrate dev --name init --skip-seed || true
+  docker compose exec -T backend npx prisma migrate dev --name init --skip-seed || docker-compose exec -T backend npx prisma migrate dev --name init --skip-seed || true
 }
 
 echo "⚙️ Lancement du seed..."
-docker compose exec -T backend npx prisma db seed || {
+docker compose exec -T backend npx prisma db seed || docker-compose exec -T backend npx prisma db seed || {
   echo "⚠️ Seed failed, trying manual execution"
-  docker compose exec -T backend npx ts-node prisma/seed.ts || true
+  docker compose exec -T backend npx ts-node prisma/seed.ts || docker-compose exec -T backend npx ts-node prisma/seed.ts || true
 }
 
 echo "🔍 Vérification sanitaire backend..."
@@ -193,22 +184,31 @@ Password: ${ADMIN_PASS}
 CREDFILE
 
 echo "✅ CREDENTIALS_ADMIN.txt généré"
+echo ""
 echo "🎉 Installation terminée!"
+echo ""
+echo "📚 URLs:"
 echo "   Frontend: http://localhost:5173"
 echo "   Backend:  http://localhost:3000"
+echo ""
+echo "🔐 Credentials:"
+echo "   Email:    ${ADMIN_EMAIL}"
+echo "   Password: ${ADMIN_PASS}"
+echo ""
+echo "⚠️  N'oubliez pas de changer le mot de passe admin après la première connexion!"
 exit 0
 ENDFILE
 chmod +x install.sh
 inc
 
-# Backend Dockerfile (fixed)
+# Backend Dockerfile (fixed - uses npm install)
 mkdir -p backend
 cat > "backend/Dockerfile" <<'ENDFILE'
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY . .
 RUN npx prisma generate
 RUN npm run build
@@ -607,7 +607,7 @@ cat > "frontend/Dockerfile" <<'ENDFILE'
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 
