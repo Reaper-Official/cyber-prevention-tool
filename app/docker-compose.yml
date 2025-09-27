@@ -1,4 +1,3 @@
-cat > /workspaces/cyber-prevention-tool/app/docker-compose.yml << 'EOF'
 services:
   db:
     image: postgres:14-alpine
@@ -15,6 +14,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
   backend:
     build: ./backend
     environment:
@@ -26,11 +26,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
   frontend:
     build: ./frontend
     ports:
       - "5173:80"
     depends_on:
       - backend
+
 volumes:
   postgres_data:
