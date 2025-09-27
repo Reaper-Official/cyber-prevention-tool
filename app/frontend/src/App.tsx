@@ -5,7 +5,7 @@ import { Layout } from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import CampaignsPage from './pages/CampaignsPage';
-import CreateCampaignPage from './pages/CreateCampaignPage';
+import CampaignDetailPage from './pages/CampaignDetailPage';
 
 function App() {
   return (
@@ -17,7 +17,7 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="campaigns" element={<CampaignsPage />} />
-            <Route path="campaigns/create" element={<CreateCampaignPage />} />
+            <Route path="campaigns/:id" element={<CampaignDetailPage />} />
           </Route>
         </Routes>
       </AuthProvider>

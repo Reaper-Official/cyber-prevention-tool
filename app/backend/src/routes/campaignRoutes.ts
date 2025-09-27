@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 router.use(authenticate);
 
-// Liste des campagnes
+// Liste toutes les campagnes
 router.get('/', async (req, res, next) => {
   try {
     const campaigns = await prisma.campaign.findMany({
@@ -27,15 +27,11 @@ router.get('/', async (req, res, next) => {
 // Créer une campagne
 router.post('/', async (req, res, next) => {
   try {
-    const { name, subject, body, fromName, fromEmail, targetUserIds, templateType } = req.body;
+    const { name, subject, body, fromName, fromEmail, targetUserIds } = req.body;
     
     const campaign = await prisma.campaign.create({
       data: {
-        name, 
-        subject, 
-        body, 
-        fromName, 
-        fromEmail, 
+        name, subject, body, fromName, fromEmail, 
         sandbox: true,
         status: 'draft',
         createdById: (req as any).user.id,
@@ -47,7 +43,7 @@ router.post('/', async (req, res, next) => {
           })) 
         }
       },
-      include: { targets: true }
+      include: { targets: true, _count: { select: { targets: true } } }
     });
     
     res.status(201).json(campaign);
@@ -56,7 +52,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// Détails d'une campagne
+// Détails d'une campagne avec stats
 router.get('/:id', async (req, res, next) => {
   try {
     const campaign = await prisma.campaign.findUnique({
@@ -76,42 +72,74 @@ router.get('/:id', async (req, res, next) => {
     });
     
     if (!campaign) throw new AppError(404, 'Campaign not found');
-    res.json(campaign);
+    
+    // Calculer les statistiques
+    const stats = {
+      total: campaign.targets.length,
+      pending: campaign.targets.filter(t => t.status === 'pending').length,
+      sent: campaign.targets.filter(t => t.status === 'sent').length,
+      opened: campaign.targets.filter(t => t.status === 'opened').length,
+      clicked: campaign.targets.filter(t => t.status === 'clicked').length,
+      clickRate: campaign.targets.length > 0 
+        ? ((campaign.targets.filter(t => t.status === 'clicked').length / campaign.targets.length) * 100).toFixed(1)
+        : 0,
+      openRate: campaign.targets.length > 0
+        ? ((campaign.targets.filter(t => ['opened', 'clicked'].includes(t.status)).length / campaign.targets.length) * 100).toFixed(1)
+        : 0
+    };
+    
+    res.json({ ...campaign, stats });
   } catch (error) {
     next(error);
   }
 });
 
-// Publier une campagne (validation requise)
-router.post('/:id/publish', async (req, res, next) => {
+// Lancer une campagne (passer de draft à published)
+router.post('/:id/launch', async (req, res, next) => {
   try {
     const campaign = await prisma.campaign.findUnique({
-      where: { id: req.params.id }
+      where: { id: req.params.id },
+      include: { targets: true }
     });
     
     if (!campaign) throw new AppError(404, 'Campaign not found');
-    if (campaign.status !== 'draft') throw new AppError(400, 'Campaign already published');
+    if (campaign.status !== 'draft') throw new AppError(400, 'Campaign already launched');
+    if (campaign.targets.length === 0) throw new AppError(400, 'No targets defined');
     
+    // Mettre à jour le statut de la campagne
     const updated = await prisma.campaign.update({
       where: { id: req.params.id },
-      data: { status: 'published' }
+      data: { 
+        status: 'published',
+        publishedAt: new Date()
+      }
     });
     
-    // TODO: Déclencher l'envoi des emails ici
+    // Marquer tous les targets comme "sent" (simulation d'envoi)
+    await prisma.campaignTarget.updateMany({
+      where: { campaignId: req.params.id },
+      data: { status: 'sent' }
+    });
     
-    res.json(updated);
+    res.json({ 
+      ...updated, 
+      message: `Campaign launched successfully. ${campaign.targets.length} emails sent.` 
+    });
   } catch (error) {
     next(error);
   }
 });
 
-// Tracking - Enregistrer l'ouverture d'un email
+// Tracking - Ouverture d'email (pixel tracker)
 router.get('/track/open/:trackingId', async (req, res, next) => {
   try {
     const { trackingId } = req.params;
     
-    await prisma.campaignTarget.update({
-      where: { trackingId },
+    await prisma.campaignTarget.updateMany({
+      where: { 
+        trackingId,
+        status: 'sent'
+      },
       data: { 
         status: 'opened',
         openedAt: new Date()
@@ -122,11 +150,11 @@ router.get('/track/open/:trackingId', async (req, res, next) => {
     const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
     res.type('image/gif').send(pixel);
   } catch (error) {
-    next(error);
+    res.type('image/gif').send(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'));
   }
 });
 
-// Tracking - Enregistrer le clic sur un lien
+// Tracking - Clic sur lien
 router.get('/track/click/:trackingId', async (req, res, next) => {
   try {
     const { trackingId } = req.params;
@@ -137,17 +165,46 @@ router.get('/track/click/:trackingId', async (req, res, next) => {
         status: 'clicked',
         clickedAt: new Date()
       },
-      include: { campaign: true }
+      include: { campaign: true, user: true }
     });
     
-    // Rediriger vers la page de formation
-    res.redirect(`/training/${trackingId}`);
+    // Rediriger vers une page d'information
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Security Awareness Training</title>
+        <style>
+          body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+          .warning { background: #fef3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 8px; }
+          h1 { color: #d63031; }
+          .info { background: #e8f4f8; padding: 15px; border-radius: 8px; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="warning">
+          <h1>⚠️ This was a simulated phishing attack</h1>
+          <p>You clicked on a link in a simulated phishing email. In a real attack, this could have compromised your data.</p>
+        </div>
+        <div class="info">
+          <h3>What to look for:</h3>
+          <ul>
+            <li>Verify sender email addresses carefully</li>
+            <li>Hover over links before clicking</li>
+            <li>Be suspicious of urgent requests</li>
+            <li>Report suspicious emails to IT</li>
+          </ul>
+        </div>
+        <p><a href="/">Return to dashboard</a></p>
+      </body>
+      </html>
+    `);
   } catch (error) {
     next(error);
   }
 });
 
-// Rapport de campagne
+// Rapport détaillé d'une campagne
 router.get('/:id/report', async (req, res, next) => {
   try {
     const campaign = await prisma.campaign.findUnique({
@@ -156,9 +213,12 @@ router.get('/:id/report', async (req, res, next) => {
         targets: {
           include: {
             user: {
-              select: { email: true, firstName: true, lastName: true }
+              select: { id: true, email: true, firstName: true, lastName: true }
             }
           }
+        },
+        createdBy: {
+          select: { email: true, firstName: true }
         }
       }
     });
@@ -167,19 +227,58 @@ router.get('/:id/report', async (req, res, next) => {
     
     const stats = {
       total: campaign.targets.length,
-      sent: campaign.targets.filter(t => t.status !== 'pending').length,
-      opened: campaign.targets.filter(t => t.status === 'opened' || t.status === 'clicked').length,
+      pending: campaign.targets.filter(t => t.status === 'pending').length,
+      sent: campaign.targets.filter(t => t.status === 'sent').length,
+      opened: campaign.targets.filter(t => t.status === 'opened').length,
       clicked: campaign.targets.filter(t => t.status === 'clicked').length,
       clickRate: campaign.targets.length > 0 
-        ? (campaign.targets.filter(t => t.status === 'clicked').length / campaign.targets.length * 100).toFixed(2)
+        ? ((campaign.targets.filter(t => t.status === 'clicked').length / campaign.targets.length) * 100).toFixed(1)
+        : 0,
+      openRate: campaign.targets.length > 0
+        ? ((campaign.targets.filter(t => ['opened', 'clicked'].includes(t.status)).length / campaign.targets.length) * 100).toFixed(1)
         : 0
     };
     
+    // Grouper par statut
+    const targetsByStatus = {
+      pending: campaign.targets.filter(t => t.status === 'pending'),
+      sent: campaign.targets.filter(t => t.status === 'sent'),
+      opened: campaign.targets.filter(t => t.status === 'opened'),
+      clicked: campaign.targets.filter(t => t.status === 'clicked')
+    };
+    
     res.json({
-      campaign,
+      campaign: {
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        createdAt: campaign.createdAt,
+        publishedAt: campaign.publishedAt,
+        createdBy: campaign.createdBy
+      },
       stats,
-      targets: campaign.targets
+      targetsByStatus,
+      recommendations: stats.clickRate > 20 ? [
+        'Click rate is high - consider additional training',
+        'Review email templates for suspicious indicators',
+        'Schedule follow-up training sessions'
+      ] : [
+        'Good awareness level maintained',
+        'Continue regular training exercises'
+      ]
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Supprimer une campagne
+router.delete('/:id', async (req, res, next) => {
+  try {
+    await prisma.campaign.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ message: 'Campaign deleted successfully' });
   } catch (error) {
     next(error);
   }
