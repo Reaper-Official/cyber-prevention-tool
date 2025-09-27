@@ -15,6 +15,7 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="campaigns" element={<CampaignsPage />} />
+            <Route path="campaigns/create" element={<CreateCampaignPage />} />
           </Route>
         </Routes>
       </AuthProvider>

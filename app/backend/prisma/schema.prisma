@@ -41,16 +41,20 @@ model Campaign {
   createdById String
   createdBy   User     @relation("CampaignCreator", fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
+  publishedAt DateTime?
   targets     CampaignTarget[]
 }
 
 model CampaignTarget {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status      String   @default("pending")
-  trackingId  String   @unique @default(uuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      String    @default("pending")
+  trackingId  String    @unique @default(uuid())
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  createdAt   DateTime  @default(now())
   @@unique([campaignId, userId])
 }

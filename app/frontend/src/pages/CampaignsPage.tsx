@@ -1,47 +1,132 @@
-import { useEffect, useState } from 'react';
+import { useState, FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
-import { Plus } from 'lucide-react';
-export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState<any[]>([]);
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await api.get('/campaigns');
-        setCampaigns(res.data);
-      } catch (error) {
-        console.error(error);
-      }
-    };
-    load();
-  }, []);
+
+export default function CreateCampaignPage() {
+  const [name, setName] = useState('');
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [fromName, setFromName] = useState('');
+  const [fromEmail, setFromEmail] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await api.post('/campaigns', {
+        name,
+        subject,
+        body,
+        fromName,
+        fromEmail,
+        targetUserIds: [] // À implémenter: sélection des cibles
+      });
+
+      navigate(`/campaigns/${response.data.id}`);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create campaign');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div><h1 className="text-3xl font-bold">Campaigns</h1><p className="text-gray-600 mt-2">Manage phishing simulations</p></div>
-        <button className="btn btn-primary flex items-center space-x-2"><Plus className="w-5 h-5" /><span>Create</span></button>
-      </div>
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6">Create New Campaign</h1>
+
       <div className="card">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left py-3 px-4">Name</th>
-              <th className="text-left py-3 px-4">Status</th>
-              <th className="text-left py-3 px-4">Targets</th>
-              <th className="text-left py-3 px-4">Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {campaigns.map((c) => (
-              <tr key={c.id} className="border-b hover:bg-gray-50">
-                <td className="py-3 px-4 font-medium">{c.name}</td>
-                <td className="py-3 px-4">{c.status}</td>
-                <td className="py-3 px-4">{c._count?.targets || 0}</td>
-                <td className="py-3 px-4 text-sm text-gray-600">{new Date(c.createdAt).toLocaleDateString()}</td>
-              </tr>
-            ))}
-            {campaigns.length === 0 && <tr><td colSpan={4} className="py-8 text-center text-gray-500">No campaigns</td></tr>}
-          </tbody>
-        </table>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="label">Campaign Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input"
+              required
+              placeholder="Q4 Security Training"
+            />
+          </div>
+
+          <div>
+            <label className="label">Email Subject</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="input"
+              required
+              placeholder="Important: Update Your Password"
+            />
+          </div>
+
+          <div>
+            <label className="label">Email Body</label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              className="input h-48"
+              required
+              placeholder="Dear Employee,
+
+We detected unusual activity..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">From Name</label>
+              <input
+                type="text"
+                value={fromName}
+                onChange={(e) => setFromName(e.target.value)}
+                className="input"
+                required
+                placeholder="IT Support"
+              />
+            </div>
+
+            <div>
+              <label className="label">From Email</label>
+              <input
+                type="email"
+                value={fromEmail}
+                onChange={(e) => setFromEmail(e.target.value)}
+                className="input"
+                required
+                placeholder="support@company.com"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn btn-primary"
+            >
+              {loading ? 'Creating...' : 'Create Campaign'}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/campaigns')}
+              className="btn btn-secondary"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
