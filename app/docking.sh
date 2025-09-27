@@ -6,7 +6,7 @@ sleep 10
 
 docker compose down
 sleep 10
-docker rmi app-frontend
+docker rmi app-backend app-frontend
 sleep 10
 docker compose build --no-cache backend
 docker compose build --no-cache frontend
