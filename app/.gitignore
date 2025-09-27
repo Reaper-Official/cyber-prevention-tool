@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.local
+.DS_Store
+CREDENTIALS_ADMIN.txt
+MANIFEST.sha256
