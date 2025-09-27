@@ -1,0 +1,4 @@
+## Stack
+- React 18 + TypeScript + Vite
+- Node.js 18 + Express + Prisma
+- PostgreSQL 14 + Docker
