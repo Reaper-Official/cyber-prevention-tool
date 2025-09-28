@@ -12,7 +12,7 @@ interface ReadingMetrics {
 
 export class ReadingDetector {
   private metrics: ReadingMetrics;
-  private focusTimer: NodeJS.Timeout | null = null;
+  private focusTimer: number | null = null;
   private scrollHandler: ((e: Event) => void) | null = null;
   private trackingId: string;
   private minSecondsPerWord: number;
@@ -111,7 +111,7 @@ export class ReadingDetector {
     window.addEventListener('pagehide', sendMetrics);
 
     // Envoyer périodiquement (toutes les 30 secondes)
-    setInterval(() => {
+    this.focusTimer = window.setInterval(() => {
       this.calculateFinalMetrics();
       this.sendToBackend();
     }, 30000);

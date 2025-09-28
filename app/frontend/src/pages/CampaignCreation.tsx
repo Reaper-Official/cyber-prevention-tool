@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
@@ -7,9 +7,7 @@ import {
   Send, 
   AlertCircle,
   CheckCircle,
-  ChevronRight,
-  Building,
-  UserCheck
+  ChevronRight
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -73,12 +71,12 @@ const CampaignCreation: React.FC = () => {
     setError(null);
 
     try {
-      // Créer la campagne
       const response = await api.post('/api/campaigns', formData);
       setCampaignId(response.data.id);
 
-      // Si mode sandbox ou validation requise, soumettre pour approbation
-      if (process.env.REACT_APP_REQUIRE_APPROVAL === 'true') {
+      // Check if approval is required
+      const requireApproval = import.meta.env.VITE_REQUIRE_APPROVAL === 'true';
+      if (requireApproval) {
         await api.post(`/api/campaigns/${response.data.id}/submit`);
       }
 
@@ -88,6 +86,22 @@ const CampaignCreation: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTargetChange = (type: 'department' | 'specific_users' | 'all', ids: string[]) => {
+    setFormData({
+      ...formData,
+      targetType: type,
+      targetIds: ids
+    });
+  };
+
+  const handleTemplateSelect = (id: string) => {
+    setFormData({ ...formData, templateId: id });
+  };
+
+  const handleEditStep = (step: number) => {
+    setCurrentStep(step);
   };
 
   const renderStepContent = () => {
@@ -143,11 +157,7 @@ const CampaignCreation: React.FC = () => {
           <TargetSelection
             targetType={formData.targetType}
             targetIds={formData.targetIds}
-            onChange={(type, ids) => setFormData({
-              ...formData,
-              targetType: type,
-              targetIds: ids
-            })}
+            onChange={handleTargetChange}
           />
         );
 
@@ -175,7 +185,7 @@ const CampaignCreation: React.FC = () => {
               </button>
 
               <button
-className={`p-6 border-2 rounded-lg transition-all ${
+                className={`p-6 border-2 rounded-lg transition-all ${
                   formData.templateType === 'custom'
                     ? 'border-primary-500 bg-primary-50'
                     : 'border-gray-200 hover:border-gray-300'
@@ -209,7 +219,7 @@ className={`p-6 border-2 rounded-lg transition-all ${
               {formData.templateType === 'predefined' && (
                 <TemplateSelection
                   selectedId={formData.templateId}
-                  onSelect={(id) => setFormData({ ...formData, templateId: id })}
+                  onSelect={handleTemplateSelect}
                 />
               )}
 
@@ -274,7 +284,7 @@ className={`p-6 border-2 rounded-lg transition-all ${
         return (
           <CampaignPreview
             campaignData={formData}
-            onEdit={(step) => setCurrentStep(step)}
+            onEdit={handleEditStep}
           />
         );
 
@@ -290,6 +300,10 @@ className={`p-6 border-2 rounded-lg transition-all ${
         return null;
     }
   };
+
+  // Log user info for debugging (remove in production)
+  console.log('Current user:', user);
+  console.log('Navigate function available:', !!navigate);
 
   return (
     <div className="max-w-4xl mx-auto">

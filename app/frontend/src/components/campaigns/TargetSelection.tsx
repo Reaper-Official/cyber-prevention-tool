@@ -3,9 +3,9 @@ import { Users, Building, UserCheck, Search } from 'lucide-react';
 import { api } from '../../services/api';
 
 interface TargetSelectionProps {
-  targetType: string;
+  targetType: 'department' | 'specific_users' | 'all';
   targetIds: string[];
-  onChange: (type: string, ids: string[]) => void;
+  onChange: (type: 'department' | 'specific_users' | 'all', ids: string[]) => void;
 }
 
 const TargetSelection: React.FC<TargetSelectionProps> = ({
@@ -16,7 +16,7 @@ const TargetSelection: React.FC<TargetSelectionProps> = ({
   const [departments, setDepartments] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -43,7 +43,7 @@ const TargetSelection: React.FC<TargetSelectionProps> = ({
     `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleTargetTypeChange = (type: string) => {
+  const handleTargetTypeChange = (type: 'department' | 'specific_users' | 'all') => {
     onChange(type, []);
   };
 
