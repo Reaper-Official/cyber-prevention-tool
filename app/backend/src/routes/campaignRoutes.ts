@@ -26,7 +26,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // Créer une nouvelle campagne
-router.post('/', authorize(['Admin', 'Manager']), validateCampaignInput, async (req, res, next) => {
+router.post("/", (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
       name,
