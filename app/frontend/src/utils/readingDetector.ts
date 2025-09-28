@@ -185,4 +185,33 @@ export class ReadingDetector {
         <h4 style="margin: 0 0 8px 0; color: #92400E;">
           ⚠️ Lecture rapide détectée
         </h4>
-        <p>
+        <p style="margin: 0; color: #78350F; font-size: 14px;">
+          Une formation complémentaire sera programmée pour améliorer votre vigilance face au phishing.
+        </p>
+      </div>
+    `;
+    
+    document.body.appendChild(warning);
+    
+    // Retirer l'avertissement après 5 secondes
+    setTimeout(() => {
+      warning.remove();
+    }, 5000);
+  }
+
+  public destroy() {
+    // Nettoyer les event listeners
+    if (this.scrollHandler) {
+      window.removeEventListener('scroll', this.scrollHandler);
+    }
+    
+    if (this.focusTimer) {
+      clearInterval(this.focusTimer);
+    }
+  }
+}
+
+// Fonction utilitaire pour initialiser le tracking sur une page
+export function initializeReadingTracking(trackingId: string): ReadingDetector {
+  return new ReadingDetector(trackingId);
+}
