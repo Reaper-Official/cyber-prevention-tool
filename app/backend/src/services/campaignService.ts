@@ -69,6 +69,7 @@ export class CampaignService {
       data: targets.map(user => ({
         campaignId: campaign.id,
         userId: user.id,
+        trackingId: this.generateTrackingId(),
         status: 'pending'
       }))
     });
@@ -97,6 +98,7 @@ export class CampaignService {
         throw new AppError(400, 'Invalid target type');
     }
   }
+
 
   async updateCampaignTemplate(campaignId: string, template: any) {
     return await this.prisma.campaign.update({

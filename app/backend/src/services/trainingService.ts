@@ -13,7 +13,10 @@ export class TrainingService {
     // Récupérer le profil utilisateur et les résultats de la campagne
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { department: true }
+      include: { 
+        department: true,
+        role: true
+      }
     });
 
     const campaignTarget = await this.prisma.campaignTarget.findFirst({
@@ -29,7 +32,7 @@ export class TrainingService {
     const trainingContent = await this.aiProvider.generateTrainingContent(
       {
         department: user.department?.name,
-        role: user.role,
+        role: user.role.name,
         securityLevel: user.securityLevel
       },
       {

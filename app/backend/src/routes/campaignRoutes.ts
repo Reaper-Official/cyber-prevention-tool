@@ -1,11 +1,10 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, authorize } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { CampaignService } from '../services/campaignService';
 import { AIProvider } from '../services/aiProvider';
 import { EmailService } from '../services/emailService';
-import { validateCampaignInput } from '../validators/campaignValidator';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -16,7 +15,7 @@ const emailService = new EmailService();
 router.use(authenticate);
 
 // Récupérer toutes les campagnes
-router.get('/', async (req, res, next) => {
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const campaigns = await campaignService.getAllCampaigns((req as any).user.id);
     res.json(campaigns);
@@ -26,13 +25,13 @@ router.get('/', async (req, res, next) => {
 });
 
 // Créer une nouvelle campagne
-router.post("/", (req: Request, res: Response, next: NextFunction) => {
+router.post('/', authorize(['Admin', 'Manager']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
       name,
-      targetType, // 'department', 'specific_users', 'all'
+      targetType,
       targetIds,
-      templateType, // 'predefined', 'custom', 'ai_generated'
+      templateType,
       templateId,
       customTemplate,
       aiPrompt,
@@ -74,7 +73,7 @@ router.post("/", (req: Request, res: Response, next: NextFunction) => {
 });
 
 // Valider une campagne (RH/Sécurité)
-router.post('/:id/validate', authorize(['Admin', 'Validator']), async (req, res, next) => {
+router.post('/:id/validate', authorize(['Admin', 'Validator']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { approved, comments } = req.body;
     
@@ -101,22 +100,18 @@ router.post('/:id/validate', authorize(['Admin', 'Validator']), async (req, res,
   }
 });
 
-// Soumettre une campagne pour validation
-router.post('/:id/submit', authorize(['Admin', 'Manager']), async (req, res, next) => {
+// Les autres routes...
+router.post('/:id/submit', authorize(['Admin', 'Manager']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const campaign = await campaignService.submitForApproval(req.params.id);
-    
-    // Notifier les validateurs
     await emailService.notifyValidators(campaign);
-    
     res.json(campaign);
   } catch (error) {
     next(error);
   }
 });
 
-// Lancer une campagne
-router.post('/:id/launch', authorize(['Admin']), async (req, res, next) => {
+router.post('/:id/launch', authorize(['Admin']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const campaign = await campaignService.getCampaign(req.params.id);
     
@@ -128,10 +123,8 @@ router.post('/:id/launch', authorize(['Admin']), async (req, res, next) => {
       throw new AppError(400, 'Campaign must be approved before launch');
     }
 
-    // Lancer la campagne
     const launchedCampaign = await campaignService.launchCampaign(req.params.id);
 
-    // Envoyer les emails de simulation
     if (!process.env.SANDBOX_MODE || process.env.SANDBOX_MODE === 'false') {
       await emailService.sendCampaignEmails(launchedCampaign);
     }
@@ -142,8 +135,7 @@ router.post('/:id/launch', authorize(['Admin']), async (req, res, next) => {
   }
 });
 
-// Obtenir les statistiques d'une campagne
-router.get('/:id/stats', async (req, res, next) => {
+router.get('/:id/stats', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const stats = await campaignService.getCampaignStats(req.params.id);
     res.json(stats);
@@ -152,8 +144,7 @@ router.get('/:id/stats', async (req, res, next) => {
   }
 });
 
-// Obtenir le rapport d'une campagne
-router.get('/:id/report', async (req, res, next) => {
+router.get('/:id/report', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const report = await campaignService.generateReport(req.params.id);
     res.json(report);
@@ -162,8 +153,7 @@ router.get('/:id/report', async (req, res, next) => {
   }
 });
 
-// Exporter le rapport
-router.get('/:id/report/export', async (req, res, next) => {
+router.get('/:id/report/export', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const format = req.query.format as string || 'pdf';
     const report = await campaignService.exportReport(req.params.id, format);
@@ -176,8 +166,7 @@ router.get('/:id/report/export', async (req, res, next) => {
   }
 });
 
-// Récupérer les templates disponibles
-router.get('/templates', async (req, res, next) => {
+router.get('/templates', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const templates = await campaignService.getAvailableTemplates();
     res.json(templates);
@@ -186,8 +175,7 @@ router.get('/templates', async (req, res, next) => {
   }
 });
 
-// Générer un template via IA
-router.post('/templates/generate', authorize(['Admin', 'Manager']), async (req, res, next) => {
+router.post('/templates/generate', authorize(['Admin', 'Manager']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { prompt, targetDepartment, targetRoles } = req.body;
     

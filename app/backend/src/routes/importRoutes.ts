@@ -1,133 +1,120 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticate } from '../middleware/auth';
-import bcrypt from 'bcryptjs';
+import { authenticate, authorize } from '../middleware/auth';
+import multer from 'multer';
+import csv from 'csv-parser';
+import fs from 'fs';
 
 const router = Router();
 const prisma = new PrismaClient();
 
+const upload = multer({ dest: 'uploads/' });
+
 router.use(authenticate);
 
-// Importer des employés depuis JSON
-router.post('/employees', async (req, res, next) => {
+// Import CSV d'utilisateurs
+router.post('/users', authorize(['Admin']), upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const results: any[] = [];
+  const errors: any[] = [];
+  let imported = 0;
+
   try {
-    const { departments } = req.body;
-    
-    if (!departments || !Array.isArray(departments)) {
-      return res.status(400).json({ error: 'Invalid data format' });
-    }
+    // Parse CSV
+    fs.createReadStream(req.file.path)
+      .pipe(csv())
+      .on('data', (data) => results.push(data))
+      .on('end', async () => {
+        // Process each row
+        for (const row of results) {
+          try {
+            const department = await prisma.department.findFirst({
+              where: { name: row.department }
+            });
 
-    const results = {
-      departmentsCreated: 0,
-      employeesCreated: 0,
-      errors: [] as string[]
-    };
+            const role = await prisma.role.findFirst({
+              where: { name: row.role || 'Employee' }
+            });
 
-    // Obtenir le rôle Employee par défaut
-    let employeeRole = await prisma.role.findUnique({ where: { name: 'Employee' } });
-    if (!employeeRole) {
-      employeeRole = await prisma.role.create({
-        data: { name: 'Employee', permissions: {} }
-      });
-    }
-
-    for (const dept of departments) {
-      try {
-        // Créer ou récupérer le département
-        const department = await prisma.department.upsert({
-          where: { name: dept.name },
-          update: {},
-          create: { name: dept.name }
-        });
-        results.departmentsCreated++;
-
-        // Créer les employés
-        if (dept.employees && Array.isArray(dept.employees)) {
-          for (const emp of dept.employees) {
-            try {
-              const defaultPassword = emp.password || 'ChangeMe123!';
-              const hashedPassword = await bcrypt.hash(defaultPassword, 12);
-
-              await prisma.user.upsert({
-                where: { email: emp.email },
-                update: {
-                  firstName: emp.firstName,
-                  lastName: emp.lastName,
-                  position: emp.position,
-                  departmentId: department.id
-                },
-                create: {
-                  email: emp.email,
-                  password: hashedPassword,
-                  firstName: emp.firstName,
-                  lastName: emp.lastName,
-                  position: emp.position,
-                  departmentId: department.id,
-                  roleId: employeeRole.id
-                }
-              });
-              results.employeesCreated++;
-            } catch (empError: any) {
-              results.errors.push(`Employee ${emp.email}: ${empError.message}`);
+            if (!role) {
+              errors.push({ row, error: 'Role not found' });
+              continue;
             }
+
+            // Create or update user
+            await prisma.user.upsert({
+              where: { email: row.email },
+              update: {
+                firstName: row.firstName,
+                lastName: row.lastName,
+                departmentId: department?.id
+              },
+              create: {
+                email: row.email,
+                password: '$2a$12$default.password.hash', // Default password
+                firstName: row.firstName,
+                lastName: row.lastName,
+                departmentId: department?.id,
+                roleId: role.id,
+                active: true
+              }
+            });
+            
+            imported++;
+          } catch (error) {
+            errors.push({ row, error });
           }
         }
-      } catch (deptError: any) {
-        results.errors.push(`Department ${dept.name}: ${deptError.message}`);
-      }
+
+        // Clean up file
+        fs.unlinkSync(req.file!.path);
+
+        res.json({
+          success: true,
+          imported,
+          total: results.length,
+          errors: errors.length,
+          errorDetails: errors
+        });
+      });
+  } catch (error) {
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
     }
-
-    res.json(results);
-  } catch (error) {
     next(error);
   }
 });
 
-// Lister tous les départements avec employés
-router.get('/departments', async (req, res, next) => {
+// Export users to CSV
+router.get('/users/export', authorize(['Admin']), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const departments = await prisma.department.findMany({
+    const users = await prisma.user.findMany({
       include: {
-        users: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            position: true,
-            active: true
-          }
-        }
+        department: true,
+        role: true
       }
     });
-    res.json(departments);
-  } catch (error) {
-    next(error);
-  }
-});
 
-// Créer des templates prédéfinis
-router.post('/templates', async (req, res, next) => {
-  try {
-    const { name, subject, body, fromName, fromEmail, category } = req.body;
-    
-    const template = await prisma.template.create({
-      data: { name, subject, body, fromName, fromEmail, category: category || 'general' }
-    });
-    
-    res.status(201).json(template);
-  } catch (error) {
-    next(error);
-  }
-});
+    const csvData = users.map(u => ({
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      department: u.department?.name,
+      role: u.role.name,
+      active: u.active
+    }));
 
-// Lister tous les templates
-router.get('/templates', async (req, res, next) => {
-  try {
-    const templates = await prisma.template.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(templates);
+    // Convert to CSV (simplified)
+    const headers = Object.keys(csvData[0]).join(',');
+    const rows = csvData.map(row => Object.values(row).join(','));
+    const csv = [headers, ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=users.csv');
+    res.send(csv);
   } catch (error) {
     next(error);
   }

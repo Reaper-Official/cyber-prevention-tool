@@ -379,7 +379,7 @@ body: '<p>Bonjour,</p><p>Une mise à jour de sécurité importante nécessite vo
     }
   }
 
-  private async callOllama(prompt: string): Promise<string> {
+    private async callOllama(prompt: string): Promise<string> {
     // Implémentation pour Ollama (serveur local)
     const response = await fetch(`${process.env.OLLAMA_URL || 'http://localhost:11434'}/api/generate`, {
       method: 'POST',
@@ -395,7 +395,7 @@ body: '<p>Bonjour,</p><p>Une mise à jour de sécurité importante nécessite vo
       throw new Error('Ollama request failed');
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
     return data.response;
   }
 

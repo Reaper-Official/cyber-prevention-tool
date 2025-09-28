@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { TrackingService } from '../services/trackingService';
 import { TrainingService } from '../services/trainingService';
@@ -9,9 +9,9 @@ const trackingService = new TrackingService(prisma);
 const trainingService = new TrainingService(prisma);
 
 // Tracking pixel pour l'ouverture d'email
-router.get('/open/:trackingId', async (req, res) => {
+router.get('/open/:trackingId', async (req: Request, res: Response) => {
   try {
-    await trackingService.trackOpen(req.params.trackingId, req.ip);
+    await trackingService.trackOpen(req.params.trackingId, req.ip || 'unknown');
     
     // Retourner un pixel transparent 1x1
     const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
@@ -28,9 +28,9 @@ router.get('/open/:trackingId', async (req, res) => {
 });
 
 // Tracking des clics sur liens
-router.get('/click/:trackingId', async (req, res) => {
+router.get('/click/:trackingId', async (req: Request, res: Response) => {
   try {
-    const target = await trackingService.trackClick(req.params.trackingId, req.ip);
+    const target = await trackingService.trackClick(req.params.trackingId, req.ip || 'unknown');
     
     if (target) {
       // Rediriger vers la page de landing
@@ -45,7 +45,7 @@ router.get('/click/:trackingId', async (req, res) => {
 });
 
 // Tracking de la lecture (temps passé sur l'email)
-router.post('/reading', async (req, res) => {
+router.post('/reading', async (req: Request, res: Response) => {
   try {
     const {
       trackingId,
@@ -86,7 +86,7 @@ router.post('/reading', async (req, res) => {
 });
 
 // Tracking de soumission de formulaire
-router.post('/submit/:trackingId', async (req, res) => {
+router.post('/submit/:trackingId', async (req: Request, res: Response) => {
   try {
     const { formData } = req.body;
     
@@ -110,7 +110,7 @@ router.post('/submit/:trackingId', async (req, res) => {
 });
 
 // Analytics endpoint pour le dashboard
-router.get('/analytics/:campaignId', async (req, res) => {
+router.get('/analytics/:campaignId', async (req: Request, res: Response) => {
   try {
     const analytics = await trackingService.getCampaignAnalytics(req.params.campaignId);
     res.json(analytics);
