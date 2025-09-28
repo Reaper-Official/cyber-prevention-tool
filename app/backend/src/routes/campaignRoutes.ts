@@ -1,223 +1,203 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
+import { CampaignService } from '../services/campaignService';
+import { AIProvider } from '../services/aiProvider';
+import { EmailService } from '../services/emailService';
+import { validateCampaignInput } from '../validators/campaignValidator';
 
 const router = Router();
 const prisma = new PrismaClient();
+const campaignService = new CampaignService(prisma);
+const aiProvider = new AIProvider();
+const emailService = new EmailService();
 
 router.use(authenticate);
 
-// Liste des campagnes
+// Récupérer toutes les campagnes
 router.get('/', async (req, res, next) => {
   try {
-    const campaigns = await prisma.campaign.findMany({
-      include: { 
-        createdBy: { select: { email: true, firstName: true } }, 
-        _count: { select: { targets: true } },
-        template: { select: { name: true } }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    const campaigns = await campaignService.getAllCampaigns((req as any).user.id);
     res.json(campaigns);
   } catch (error) {
     next(error);
   }
 });
 
-// Créer une campagne avec ciblage par département
-router.post('/', async (req, res, next) => {
+// Créer une nouvelle campagne
+router.post('/', authorize(['Admin', 'Manager']), validateCampaignInput, async (req, res, next) => {
   try {
-    const { 
-      name, subject, body, fromName, fromEmail, 
-      templateId, targetType, targetDepartmentIds, targetUserIds 
+    const {
+      name,
+      targetType, // 'department', 'specific_users', 'all'
+      targetIds,
+      templateType, // 'predefined', 'custom', 'ai_generated'
+      templateId,
+      customTemplate,
+      aiPrompt,
+      scheduledAt
     } = req.body;
-    
-    let targets = [];
-    
-    if (targetType === 'all') {
-      const allUsers = await prisma.user.findMany({
-        where: { active: true, role: { name: { not: 'Admin' } } }
-      });
-      targets = allUsers.map(u => u.id);
-    } else if (targetType === 'departments' && targetDepartmentIds) {
-      const deptUsers = await prisma.user.findMany({
-        where: { 
-          departmentId: { in: targetDepartmentIds },
-          active: true 
-        }
-      });
-      targets = deptUsers.map(u => u.id);
-    } else if (targetType === 'specific' && targetUserIds) {
-      targets = targetUserIds;
-    }
-    
-    const campaign = await prisma.campaign.create({
-      data: {
-        name, subject, body, fromName, fromEmail,
-        templateId,
-        sandbox: true,
-        status: 'draft',
-        createdById: (req as any).user.id,
-        targets: { 
-          create: targets.map((userId: string) => ({ 
-            userId, 
-            status: 'pending',
-            trackingId: require('crypto').randomUUID()
-          })) 
-        }
-      },
-      include: { 
-        targets: { include: { user: { select: { firstName: true, lastName: true, email: true, department: true } } } },
-        _count: { select: { targets: true } } 
-      }
+
+    // Créer la campagne en mode brouillon
+    const campaign = await campaignService.createCampaign({
+      name,
+      targetType,
+      targetIds,
+      createdById: (req as any).user.id,
+      status: 'draft'
     });
-    
+
+    // Gérer le template selon le type
+    let template;
+    if (templateType === 'predefined') {
+      template = await campaignService.getTemplate(templateId);
+    } else if (templateType === 'custom') {
+      template = customTemplate;
+    } else if (templateType === 'ai_generated') {
+      // Générer le template via IA
+      const targets = await campaignService.getTargetUsers(targetType, targetIds);
+      template = await aiProvider.generateCampaignTemplate({
+        prompt: aiPrompt,
+        targetProfiles: targets,
+        campaignName: name
+      });
+    }
+
+    // Mettre à jour la campagne avec le template
+    await campaignService.updateCampaignTemplate(campaign.id, template);
+
     res.status(201).json(campaign);
   } catch (error) {
     next(error);
   }
 });
 
-// Détails d'une campagne avec stats
-router.get('/:id', async (req, res, next) => {
+// Valider une campagne (RH/Sécurité)
+router.post('/:id/validate', authorize(['Admin', 'Validator']), async (req, res, next) => {
   try {
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: req.params.id },
-      include: { 
-        targets: { 
-          include: { 
-            user: { 
-              select: { email: true, firstName: true, lastName: true, position: true, department: { select: { name: true } } } 
-            } 
-          } 
-        }, 
-        createdBy: { select: { email: true, firstName: true } },
-        template: true
-      }
-    });
+    const { approved, comments } = req.body;
     
-    if (!campaign) throw new AppError(404, 'Campaign not found');
+    const campaign = await campaignService.getCampaign(req.params.id);
     
-    const clickCount = campaign.targets.filter(t => t.status === 'clicked').length;
-    const openCount = campaign.targets.filter(t => ['opened', 'clicked'].includes(t.status)).length;
+    if (!campaign) {
+      throw new AppError(404, 'Campaign not found');
+    }
+
+    if (campaign.status !== 'pending_approval') {
+      throw new AppError(400, 'Campaign is not pending approval');
+    }
+
+    const updatedCampaign = await campaignService.validateCampaign(
+      req.params.id,
+      (req as any).user.id,
+      approved,
+      comments
+    );
+
+    res.json(updatedCampaign);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Soumettre une campagne pour validation
+router.post('/:id/submit', authorize(['Admin', 'Manager']), async (req, res, next) => {
+  try {
+    const campaign = await campaignService.submitForApproval(req.params.id);
     
-    const stats = {
-      total: campaign.targets.length,
-      pending: campaign.targets.filter(t => t.status === 'pending').length,
-      sent: campaign.targets.filter(t => t.status === 'sent').length,
-      opened: openCount,
-      clicked: clickCount,
-      clickRate: campaign.targets.length > 0 ? ((clickCount / campaign.targets.length) * 100).toFixed(1) : '0',
-      openRate: campaign.targets.length > 0 ? ((openCount / campaign.targets.length) * 100).toFixed(1) : '0'
-    };
+    // Notifier les validateurs
+    await emailService.notifyValidators(campaign);
     
-    res.json({ ...campaign, stats });
+    res.json(campaign);
   } catch (error) {
     next(error);
   }
 });
 
 // Lancer une campagne
-router.post('/:id/launch', async (req, res, next) => {
+router.post('/:id/launch', authorize(['Admin']), async (req, res, next) => {
   try {
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: req.params.id },
-      include: { targets: true }
-    });
+    const campaign = await campaignService.getCampaign(req.params.id);
     
-    if (!campaign) throw new AppError(404, 'Campaign not found');
-    if (campaign.status !== 'draft') throw new AppError(400, 'Campaign already launched');
-    if (campaign.targets.length === 0) throw new AppError(400, 'No targets defined');
-    
-    await prisma.campaign.update({
-      where: { id: req.params.id },
-      data: { status: 'published', publishedAt: new Date() }
-    });
-    
-    await prisma.campaignTarget.updateMany({
-      where: { campaignId: req.params.id },
-      data: { status: 'sent' }
-    });
-    
-    res.json({ message: `Campaign launched. ${campaign.targets.length} emails sent.` });
+    if (!campaign) {
+      throw new AppError(404, 'Campaign not found');
+    }
+
+    if (campaign.status !== 'approved') {
+      throw new AppError(400, 'Campaign must be approved before launch');
+    }
+
+    // Lancer la campagne
+    const launchedCampaign = await campaignService.launchCampaign(req.params.id);
+
+    // Envoyer les emails de simulation
+    if (!process.env.SANDBOX_MODE || process.env.SANDBOX_MODE === 'false') {
+      await emailService.sendCampaignEmails(launchedCampaign);
+    }
+
+    res.json(launchedCampaign);
   } catch (error) {
     next(error);
   }
 });
 
-// Tracking - Ouverture
-router.get('/track/open/:trackingId', async (req, res, next) => {
+// Obtenir les statistiques d'une campagne
+router.get('/:id/stats', async (req, res, next) => {
   try {
-    await prisma.campaignTarget.updateMany({
-      where: { trackingId: req.params.trackingId, status: 'sent' },
-      data: { status: 'opened', openedAt: new Date() }
-    });
-    const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
-    res.type('image/gif').send(pixel);
-  } catch (error) {
-    res.type('image/gif').send(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'));
-  }
-});
-
-// Tracking - Clic avec page de formation
-router.get('/track/click/:trackingId', async (req, res, next) => {
-  try {
-    await prisma.campaignTarget.update({
-      where: { trackingId: req.params.trackingId },
-      data: { status: 'clicked', clickedAt: new Date() }
-    });
-    
-    res.send(`<!DOCTYPE html><html><head><title>Security Training</title><style>body{font-family:sans-serif;max-width:600px;margin:50px auto;padding:20px}.warning{background:#fef3cd;padding:20px;border-radius:8px}h1{color:#d63031}.info{background:#e8f4f8;padding:15px;border-radius:8px;margin-top:20px}</style></head><body><div class="warning"><h1>⚠️ Simulated Phishing Attack</h1><p>This was a training exercise. In a real attack, clicking this link could compromise your data.</p></div><div class="info"><h3>Security Tips:</h3><ul><li>Verify sender addresses</li><li>Hover over links before clicking</li><li>Be suspicious of urgent requests</li><li>Report suspicious emails to IT</li></ul></div></body></html>`);
+    const stats = await campaignService.getCampaignStats(req.params.id);
+    res.json(stats);
   } catch (error) {
     next(error);
   }
 });
 
-// Rapport détaillé
+// Obtenir le rapport d'une campagne
 router.get('/:id/report', async (req, res, next) => {
   try {
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: req.params.id },
-      include: {
-        targets: { include: { user: { select: { email: true, firstName: true, lastName: true, position: true, department: { select: { name: true } } } } } },
-        createdBy: { select: { email: true, firstName: true } }
-      }
-    });
-    
-    if (!campaign) throw new AppError(404, 'Campaign not found');
-    
-    const clickCount = campaign.targets.filter(t => t.status === 'clicked').length;
-    const clickRateNum = campaign.targets.length > 0 ? (clickCount / campaign.targets.length) * 100 : 0;
-    
-    // Stats par département
-    const deptStats: any = {};
-    campaign.targets.forEach(t => {
-      const deptName = t.user.department?.name || 'No Department';
-      if (!deptStats[deptName]) deptStats[deptName] = { total: 0, clicked: 0 };
-      deptStats[deptName].total++;
-      if (t.status === 'clicked') deptStats[deptName].clicked++;
-    });
-    
-    res.json({
-      campaign: { id: campaign.id, name: campaign.name, status: campaign.status },
-      stats: {
-        total: campaign.targets.length,
-        clicked: clickCount,
-        clickRate: clickRateNum.toFixed(1)
-      },
-      departmentStats: deptStats,
-      recommendations: clickRateNum > 20 ? ['High click rate - additional training needed'] : ['Good awareness level']
-    });
+    const report = await campaignService.generateReport(req.params.id);
+    res.json(report);
   } catch (error) {
     next(error);
   }
 });
 
-router.delete('/:id', async (req, res, next) => {
+// Exporter le rapport
+router.get('/:id/report/export', async (req, res, next) => {
   try {
-    await prisma.campaign.delete({ where: { id: req.params.id } });
-    res.json({ message: 'Deleted' });
+    const format = req.query.format as string || 'pdf';
+    const report = await campaignService.exportReport(req.params.id, format);
+    
+    res.setHeader('Content-Type', format === 'pdf' ? 'application/pdf' : 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=campaign-report-${req.params.id}.${format}`);
+    res.send(report);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Récupérer les templates disponibles
+router.get('/templates', async (req, res, next) => {
+  try {
+    const templates = await campaignService.getAvailableTemplates();
+    res.json(templates);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Générer un template via IA
+router.post('/templates/generate', authorize(['Admin', 'Manager']), async (req, res, next) => {
+  try {
+    const { prompt, targetDepartment, targetRoles } = req.body;
+    
+    const template = await aiProvider.generateCampaignTemplate({
+      prompt,
+      targetProfiles: { department: targetDepartment, roles: targetRoles },
+      campaignName: req.body.campaignName
+    });
+
+    res.json(template);
   } catch (error) {
     next(error);
   }
