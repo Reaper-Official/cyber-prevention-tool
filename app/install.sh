@@ -1,176 +1,150 @@
-#!/usr/bin/env bash
-set -euo pipefail
-trap 'echo "❌ Erreur pendant install.sh (ligne $LINENO)"; exit 1' ERR
+#!/bin/bash
+set -e
 
-# install.sh : installe dépendances, configure .env, démarre via docker-compose et exécute migrations & seed
-# Options:
-#   --target /path : copier le repo (optionnel) ; non utilisé par défaut
-#   --non-interactive : mode CI (ne pas attendre les confirmations)
-#   --use-docker : forcer l'utilisation de docker compose
-#   --skip-seed : ne pas lancer le seed
-#   --skip-start : ne pas démarrer les services
-
-TARGET_DIR="."
-NON_INTERACTIVE=false
-USE_DOCKER=false
-SKIP_SEED=false
-SKIP_START=false
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --target) TARGET_DIR="$2"; shift 2 ;;
-    --non-interactive) NON_INTERACTIVE=true; shift ;;
-    --use-docker) USE_DOCKER=true; shift ;;
-    --skip-seed) SKIP_SEED=true; shift ;;
-    --skip-start) SKIP_START=true; shift ;;
-    *) echo "Unknown option: $1"; exit 2 ;;
-  esac
-done
-
-echo "🚀 PhishGuard Installation (target: $TARGET_DIR)"
+echo "🚀 PhishGuard Basic - Installation Script"
+echo "========================================="
 
 # Check prerequisites
-REQUIRED_CMDS=(git openssl)
-# Prefer docker-compose tooling if available
-if command -v docker >/dev/null 2>&1; then
-  if docker compose version >/dev/null 2>&1 || docker-compose --version >/dev/null 2>&1; then
-    DOCKER_AVAILABLE=true
-    REQUIRED_CMDS+=(docker)
-  else
-    DOCKER_AVAILABLE=false
-  fi
+check_command() {
+    if ! command -v $1 &> /dev/null; then
+        echo "❌ $1 is required but not installed."
+        exit 1
+    fi
+}
+
+echo "📋 Checking prerequisites..."
+check_command docker
+check_command git
+check_command openssl
+
+# Check Docker Compose
+if docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
 else
-  DOCKER_AVAILABLE=false
+    echo "❌ Docker Compose is required but not installed."
+    exit 1
 fi
 
-for c in "${REQUIRED_CMDS[@]}"; do
-  if ! command -v "$c" >/dev/null 2>&1; then
-    echo "❌ Pré-requis manquant: $c"
-    exit 2
-  fi
-done
+echo "✅ All prerequisites met"
 
-# copy project if target differs
-if [ "$TARGET_DIR" != "." ]; then
-  echo "📁 Copie du projet vers $TARGET_DIR"
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -a --exclude='.git' ./ "$TARGET_DIR"/
-  else
-    cp -a . "$TARGET_DIR"/
-  fi
-  cd "$TARGET_DIR"
-fi
-
-# Create .env from template if missing
+# Setup environment
 if [ ! -f .env ]; then
-  echo "🔐 Création de .env depuis .env.example"
-  if [ -f .env.example ]; then
+    echo "📝 Creating .env file from template..."
     cp .env.example .env
-    JWT_SECRET=$(openssl rand -base64 32 | tr -d '\n' | tr -d '\r')
-    # portable sed replacement
-    if sed --version >/dev/null 2>&1; then
-      sed -i "s|JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" .env || true
-    else
-      # macOS fallback (shouldn't be needed in Codespaces)
-      sed -i '' "s|JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" .env || true
+    
+    # Generate secure JWT secret
+    JWT_SECRET=$(openssl rand -base64 32)
+    sed -i.bak "s|JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" .env
+    
+    # Ask for AI configuration
+    echo ""
+    echo "🤖 AI Provider Configuration"
+    echo "Available providers: GEMINI, OPENAI, CLAUDE, OLLAMA"
+    read -p "Enter AI provider (default: GEMINI): " AI_PROVIDER
+    AI_PROVIDER=${AI_PROVIDER:-GEMINI}
+    
+    read -p "Enter AI API key (leave empty for sandbox mode): " AI_API_KEY
+    AI_API_KEY=${AI_API_KEY:-sandbox-key}
+    
+    sed -i.bak "s|AI_PROVIDER=.*|AI_PROVIDER=${AI_PROVIDER}|" .env
+    sed -i.bak "s|AI_API_KEY=.*|AI_API_KEY=${AI_API_KEY}|" .env
+    
+    # Ask for SMTP configuration
+    echo ""
+    echo "📧 Email Configuration (optional, press Enter to skip)"
+    read -p "SMTP Host: " SMTP_HOST
+    if [ ! -z "$SMTP_HOST" ]; then
+        read -p "SMTP Port (587): " SMTP_PORT
+        SMTP_PORT=${SMTP_PORT:-587}
+        read -p "SMTP User: " SMTP_USER
+        read -sp "SMTP Password: " SMTP_PASS
+        echo ""
+        
+        sed -i.bak "s|SMTP_HOST=.*|SMTP_HOST=${SMTP_HOST}|" .env
+        sed -i.bak "s|SMTP_PORT=.*|SMTP_PORT=${SMTP_PORT}|" .env
+        sed -i.bak "s|SMTP_USER=.*|SMTP_USER=${SMTP_USER}|" .env
+        sed -i.bak "s|SMTP_PASS=.*|SMTP_PASS=${SMTP_PASS}|" .env
     fi
-    echo "✅ .env créé (JWT_SECRET généré)"
-  else
-    echo "⚠️ .env.example introuvable, créez manuellement .env"
-  fi
+    
+    # Clean up backup files
+    rm -f .env.bak
+    
+    echo "✅ Environment configured"
 else
-  echo "ℹ️ .env existe déjà, conservation"
+    echo "ℹ️ .env file already exists, skipping configuration"
 fi
 
-# Decide start method
-if [ "$USE_DOCKER" = false ] && [ "$DOCKER_AVAILABLE" = true ] && [ "$NON_INTERACTIVE" = false ]; then
-  echo ""
-  read -r -p "Utiliser Docker Compose pour démarrer les services ? (y/n) " ans || ans="y"
-  case "$ans" in
-    y|Y) USE_DOCKER=true ;;
-    *) USE_DOCKER=false ;;
-  esac
-fi
+# Build and start containers
+echo ""
+echo "🐳 Building Docker containers..."
+$DOCKER_COMPOSE build
 
-# Start services
-if [ "$SKIP_START" = false ]; then
-  if [ "$USE_DOCKER" = true ]; then
-    echo "🐳 Lancement via docker compose..."
-    docker-compose down -v 2>/dev/null || true
-    docker-compose up -d --build
-    echo "⏳ Attente du backend..."
-    sleep 15
-    # Run migrations & seed inside backend container
-    echo "⚙️ Exécution des migrations Prisma..."
-    docker-compose exec -T backend npx prisma migrate deploy || {
-      echo "⚠️ prisma migrate deploy failed; trying prisma migrate dev"
-      docker-compose exec -T backend npx prisma migrate dev --name init --skip-seed || true
-    }
-    if [ "$SKIP_SEED" = false ]; then
-      echo "⚙️ Lancement du seed..."
-      docker-compose exec -T backend npx prisma db seed || {
-        echo "⚠️ seed via npx prisma db seed failed; essayez d'exécuter manuellement"
-      }
-    fi
-  else
-    echo "⚠️ Mode sans conteneur — exécution locale des étapes (démo)"
-    if [ -d backend ]; then
-      echo "📦 Installation backend dependencies..."
-      if command -v pnpm >/dev/null 2>&1; then
-        (cd backend && pnpm install)
-      elif command -v yarn >/dev/null 2>&1; then
-        (cd backend && yarn install)
-      else
-        (cd backend && npm ci)
-      fi
-      echo "⚙️ Build backend..."
-      (cd backend && npm run build || true)
-      echo "⚙️ Migrations (local)..."
-      (cd backend && npx prisma migrate dev --name init --skip-seed || true)
-      if [ "$SKIP_SEED" = false ]; then
-        (cd backend && node prisma/seed.js) || (cd backend && npx ts-node prisma/seed.ts) || true
-      fi
-    fi
-    if [ -d frontend ]; then
-      echo "📦 Installation frontend dependencies..."
-      if command -v pnpm >/dev/null 2>&1; then
-        (cd frontend && pnpm install)
-      elif command -v yarn >/dev/null 2>&1; then
-        (cd frontend && yarn install)
-      else
-        (cd frontend && npm ci)
-      fi
-      echo "📦 Build frontend..."
-      (cd frontend && npm run build || true)
-    fi
-    echo "✅ Services (locaux) prêts (si les commandes ci-dessus ont réussi)"
-  fi
-fi
+echo ""
+echo "🚀 Starting services..."
+$DOCKER_COMPOSE up -d
 
-# Healthcheck
-echo "🔍 Vérification sanitaire backend..."
-if curl -sSf http://localhost:3000/health >/dev/null 2>&1; then
-  echo "✅ Backend répond sur /health"
+# Wait for services to be ready
+echo ""
+echo "⏳ Waiting for services to start..."
+sleep 10
+
+# Run database migrations
+echo ""
+echo "🗃️ Running database migrations..."
+$DOCKER_COMPOSE exec -T backend npx prisma migrate deploy || \
+    $DOCKER_COMPOSE exec -T backend npx prisma migrate dev --name init
+
+# Seed database
+echo ""
+echo "🌱 Seeding database with initial data..."
+$DOCKER_COMPOSE exec -T backend npx prisma db seed
+
+# Get admin credentials
+ADMIN_EMAIL=$(grep DEFAULT_ADMIN_EMAIL .env | cut -d '=' -f2)
+ADMIN_PASSWORD=$(grep DEFAULT_ADMIN_PASSWORD .env | cut -d '=' -f2)
+
+# Health check
+echo ""
+echo "🔍 Running health check..."
+if curl -s http://localhost:3000/health > /dev/null; then
+    echo "✅ Backend is running"
 else
-  echo "⚠️ Échec du healthcheck. Vérifiez les logs (docker-compose logs backend)"
+    echo "⚠️ Backend health check failed"
 fi
 
-# Admin credentials reminder
-ADMIN_EMAIL=$(grep -E '^DEFAULT_ADMIN_EMAIL=' .env | cut -d= -f2- || echo "admin@local.test")
-ADMIN_PASS=$(grep -E '^DEFAULT_ADMIN_PASSWORD=' .env | cut -d= -f2- || echo "ChangeMe123!")
-cat > "CREDENTIALS_ADMIN.txt" <<CREDFILE
-PhishGuard Admin Credentials
+if curl -s http://localhost:5173 > /dev/null; then
+    echo "✅ Frontend is running"
+else
+    echo "⚠️ Frontend health check failed"
+fi
 
-Email:    ${ADMIN_EMAIL}
-Password: ${ADMIN_PASS}
-
-⚠️ SECURITY WARNING:
-- Change this password immediately after first login
-- Delete this file once noted
-- Do NOT commit this file to version control
-CREDFILE
-
-echo "✅ CREDENTIALS_ADMIN.txt généré"
-
-echo "🎉 Installation terminée. Frontend: http://localhost:5173 | Backend: http://localhost:3000"
-exit 0
+# Display success message
+echo ""
+echo "========================================="
+echo "✨ PhishGuard Basic installed successfully!"
+echo "========================================="
+echo ""
+echo "🌐 Access URLs:"
+echo "   Frontend: http://localhost:5173"
+echo "   Backend API: http://localhost:3000"
+echo ""
+echo "🔐 Admin Credentials:"
+echo "   Email: ${ADMIN_EMAIL}"
+echo "   Password: ${ADMIN_PASSWORD}"
+echo ""
+echo "⚠️ IMPORTANT:"
+echo "   1. Change the admin password after first login"
+echo "   2. Configure SMTP for email sending (currently in SANDBOX mode)"
+echo "   3. Review security settings in .env file"
+echo ""
+echo "📚 Next steps:"
+echo "   1. Login to the dashboard"
+echo "   2. Import employee list (CSV)"
+echo "   3. Create your first campaign"
+echo "   4. Review documentation in /docs"
+echo ""
+echo "🛑 To stop services: $DOCKER_COMPOSE down"
+echo "📊 To view logs: $DOCKER_COMPOSE logs -f"
+echo ""
