@@ -22,7 +22,7 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({ campaignId, campa
     
     setLoading(true);
     try {
-      const response = await api.get(`/api/campaigns/${campaignId}`);
+      const response = await api.get('/api/campaigns/' + campaignId);
       setStatus(response.data.status);
     } catch (error) {
       console.error('Error checking validation status:', error);
@@ -54,57 +54,65 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({ campaignId, campa
     );
   }
 
-  let content = null;
-  
-  if (status === 'pending') {
-    content = (
-      <>
-        <Clock className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Campagne en attente de validation
-        </h2>
-        <p className="text-gray-600 mb-6">
-          La campagne {campaignName} a été créée avec succès et est en attente de validation.
-        </p>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-          <h3 className="font-semibold text-blue-900 mb-2">Prochaines étapes:</h3>
-          <ul className="text-sm text-blue-800 text-left space-y-1">
-            <li>• Un email a été envoyé aux validateurs</li>
-            <li>• Vous serez notifié une fois la décision prise</li>
-            <li>• La campagne sera lancée après approbation</li>
-          </ul>
+  const renderContent = () => {
+    if (status === 'pending') {
+      return (
+        <div>
+          <Clock className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Campagne en attente de validation
+          </h2>
+          <p className="text-gray-600 mb-6">
+            La campagne {campaignName} a été créée avec succès et est en attente de validation.
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+            <h3 className="font-semibold text-blue-900 mb-2">Prochaines étapes:</h3>
+            <ul className="text-sm text-blue-800 text-left space-y-1">
+              <li>• Un email a été envoyé aux validateurs</li>
+              <li>• Vous serez notifié une fois la décision prise</li>
+              <li>• La campagne sera lancée après approbation</li>
+            </ul>
+          </div>
         </div>
-      </>
-    );
-  } else if (status === 'approved') {
-    content = (
-      <>
-        <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Campagne approuvée!
-        </h2>
-        <p className="text-gray-600 mb-6">
-          La campagne {campaignName} a été approuvée et sera lancée selon le planning défini.
-        </p>
-      </>
-    );
-  } else if (status === 'rejected') {
-    content = (
-      <>
-        <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Campagne rejetée
-        </h2>
-        <p className="text-gray-600 mb-6">
-          La campagne {campaignName} a été rejetée. Veuillez consulter les commentaires.
-        </p>
-      </>
-    );
-  }
+      );
+    }
+    
+    if (status === 'approved') {
+      return (
+        <div>
+          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Campagne approuvée!
+          </h2>
+          <p className="text-gray-600 mb-6">
+            La campagne {campaignName} a été approuvée et sera lancée selon le planning défini.
+          </p>
+        </div>
+      );
+    }
+    
+    if (status === 'rejected') {
+      return (
+        <div>
+          <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Campagne rejetée
+          </h2>
+          <p className="text-gray-600 mb-6">
+            La campagne {campaignName} a été rejetée. Veuillez consulter les commentaires.
+          </p>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
+  const campaignUrl = '/campaigns/' + campaignId;
 
   return (
     <div className="text-center py-12">
-      {content}
+      {renderContent()}
       <div className="mt-8 space-x-4">
         
           href="/campaigns"
@@ -114,7 +122,7 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({ campaignId, campa
         </a>
         {campaignId && (
           
-            href={`/campaigns/${campaignId}`}
+            href={campaignUrl}
             className="inline-block px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             Voir les détails
