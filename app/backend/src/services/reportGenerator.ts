@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { Parser } from 'json2csv';
+import { parse } from 'json2csv';
 
 export class ReportGenerator {
   async generatePDF(report: any): Promise<Buffer> {
@@ -7,7 +7,7 @@ export class ReportGenerator {
       const doc = new PDFDocument();
       const chunks: Buffer[] = [];
 
-      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
@@ -105,10 +105,8 @@ export class ReportGenerator {
       'readingTime'
     ];
 
-    const parser = new Parser({ fields });
-    
     try {
-      const csv = parser.parse(report.targetDetails);
+      const csv = parse(report.targetDetails, { fields });
       return csv;
     } catch (err) {
       console.error('Error generating CSV:', err);
