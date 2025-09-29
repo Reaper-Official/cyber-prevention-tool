@@ -118,14 +118,14 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({
         >
           Retour aux campagnes
         </a>
-        {campaignId && (
+        {campaignId ? (
           
             href={`/campaigns/${campaignId}`}
             className="inline-block px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             Voir les détails
           </a>
-        )}
+        ) : null}
       </div>
     </div>
   );
