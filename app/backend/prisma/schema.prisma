@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  firstName     String?
+  lastName      String?
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+  roleId        String
+  role          Role      @relation(fields: [roleId], references: [id])
+  active        Boolean   @default(true)
+  securityLevel String    @default("beginner")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  campaignsCreated     Campaign[]          @relation("CampaignCreator")
+  campaignTargets      CampaignTarget[]
+  trainingSessions     TrainingSession[]
+  validations          CampaignValidation[]
+  alerts               SecurityAlert[]
+}
+
+model Role {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  permissions Json      @default("{}")
+  users       User[]
+}
+
+model Department {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  users       User[]
+  riskLevel   String    @default("medium")
+}
+
+model Campaign {
+  id                  String    @id @default(uuid())
+  name                String
+  targetType          String    // 'department', 'specific_users', 'all'
+  subject             String
+  body                String    @db.Text
+  landingPageContent  String?   @db.Text
+  fromName            String
+  fromEmail           String
+  status              String    @default("draft") // draft, pending_approval, approved, rejected, active, completed
+  sandbox             Boolean   @default(true)
+  hasPersonalization  Boolean   @default(false)
+  createdById         String
+  createdBy           User      @relation("CampaignCreator", fields: [createdById], references: [id])
+  submittedAt         DateTime?
+  launchedAt          DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  targets        CampaignTarget[]
+  validation     CampaignValidation[]
+  events         CampaignEvent[]
+  alerts         SecurityAlert[]
+  trainings      TrainingSession[]
+}
+
+model CampaignTarget {
+  id                      String    @id @default(uuid())
+  campaignId              String
+  campaign                Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackingId              String    @unique
+  status                  String    @default("pending") // pending, sent, opened, clicked, compromised
+  
+  // Tracking timestamps
+  sentAt                  DateTime?
+  openedAt                DateTime?
+  openedIp                String?
+  clickedAt               DateTime?
+  clickedIp               String?
+  submittedAt             DateTime?
+  
+  // Reading metrics
+  readingTime             Int?      // seconds
+  secondsPerWord          Float?
+  scrollDepth             Float?    // percentage
+  focusTime               Int?      // seconds
+  fastRead                Boolean   @default(false)
+  readingMetricsRecordedAt DateTime?
+  
+  // Submission data (anonymized)
+  submissionData          Json?
+  
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  
+  // Relations
+  clickEvents             ClickEvent[]
+  
+  @@unique([campaignId, userId])
+}
+
+model CampaignValidation {
+  id          String    @id @default(uuid())
+  campaignId  String
+  campaign    Campaign  @relation(fields: [campaignId], references: [id])
+  validatorId String
+  validator   User      @relation(fields: [validatorId], references: [id])
+  approved    Boolean
+  comments    String?
+  validatedAt DateTime  @default(now())
+}
+
+model EmailTemplate {
+  id             String    @id @default(uuid())
+  name           String
+  category       String    // credentials, attachment, link
+  difficulty     String    // easy, medium, hard
+  description    String?
+  subject        String
+  body           String    @db.Text
+  landingPage    String?   @db.Text
+  previewSubject String?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+}
+
+model TrainingSession {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  campaignId      String?
+  campaign        Campaign? @relation(fields: [campaignId], references: [id])
+  type            String    // standard, reinforced
+  content         Json
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  score           Float?
+  passed          Boolean   @default(false)
+  nextSessionDate DateTime?
+}
+
+model SecurityAlert {
+  id          String    @id @default(uuid())
+  type        String    // high_click_rate, fast_read_rate, credential_submission
+  severity    String    // low, medium, high, critical
+  campaignId  String?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id])
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  message     String
+  resolved    Boolean   @default(false)
+  timestamp   DateTime  @default(now())
+}
+
+model CampaignEvent {
+  id          String    @id @default(uuid())
+  campaignId  String
+  campaign    Campaign  @relation(fields: [campaignId], references: [id])
+  type        String    // created, submitted, approved, launched, completed
+  details     Json?
+  timestamp   DateTime  @default(now())
+}
+
+model ClickEvent {
+  id          String          @id @default(uuid())
+  targetId    String
+  target      CampaignTarget  @relation(fields: [targetId], references: [id])
+  timestamp   DateTime        @default(now())
+  ipAddress   String?
+}
+
+model Settings {
+  id                      String    @id @default(uuid())
+  key                     String    @unique
+  value                   Json
+  category                String
+  description             String?
+  updatedAt               DateTime  @updatedAt
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  userId      String?
+  action      String
+  entity      String
+  entityId    String?
+  details     Json?
+  ipAddress   String?
+  timestamp   DateTime  @default(now())
+}

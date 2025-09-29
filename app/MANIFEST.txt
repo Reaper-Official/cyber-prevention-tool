@@ -1,0 +1,87 @@
+phishguard-basic/
+├── README.md
+├── LICENSE
+├── .gitignore
+├── .env.example
+├── docker-compose.yml
+├── install.sh
+├── package.json
+├── backend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── .eslintrc.json
+│   ├── prisma/
+│   │   ├── schema.prisma
+│   │   ├── seed.ts
+│   │   └── migrations/
+│   └── src/
+│       ├── server.ts
+│       ├── app.ts
+│       ├── middleware/
+│       │   ├── auth.ts
+│       │   └── errorHandler.ts
+│       ├── routes/
+│       │   ├── authRoutes.ts
+│       │   ├── campaignRoutes.ts
+│       │   ├── trackingRoutes.ts
+│       │   ├── userRoutes.ts
+│       │   └── departmentRoutes.ts
+│       ├── services/
+│       │   ├── aiProvider.ts
+│       │   ├── campaignService.ts
+│       │   ├── emailService.ts
+│       │   ├── trackingService.ts
+│       │   ├── trainingService.ts
+│       │   └── reportGenerator.ts
+│       ├── validators/
+│       │   └── campaignValidator.ts
+│       └── tests/
+│           ├── campaign.test.ts
+│           └── tracking.test.ts
+├── frontend/
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   ├── index.html
+│   ├── .eslintrc.json
+│   ├── public/
+│   │   └── favicon.ico
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── index.css
+│       ├── contexts/
+│       │   └── AuthContext.tsx
+│       ├── components/
+│       │   ├── Layout.tsx
+│       │   ├── PrivateRoute.tsx
+│       │   └── campaigns/
+│       │       ├── TargetSelection.tsx
+│       │       ├── TemplateSelection.tsx
+│       │       ├── AITemplateGenerator.tsx
+│       │       ├── CampaignPreview.tsx
+│       │       └── ValidationRequest.tsx
+│       ├── pages/
+│       │   ├── LoginPage.tsx
+│       │   ├── DashboardPage.tsx
+│       │   ├── CampaignsPage.tsx
+│       │   ├── CampaignCreation.tsx
+│       │   ├── CampaignDetails.tsx
+│       │   └── TrainingPage.tsx
+│       ├── services/
+│       │   └── api.ts
+│       └── utils/
+│           └── readingDetector.ts
+├── docs/
+│   ├── API.md
+│   ├── DEPLOYMENT.md
+│   ├── SECURITY.md
+│   └── WORKFLOW.md
+└── tests/
+    └── e2e/
+        └── sandbox.test.ts

@@ -1,0 +1,1 @@
+docker compose exec backend node prisma/seed.ts

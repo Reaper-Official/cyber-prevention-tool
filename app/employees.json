@@ -1,0 +1,44 @@
+{
+  "departments": [
+    {
+      "name": "IT",
+      "employees": [
+        {
+          "email": "john.doe@company.com",
+          "firstName": "John",
+          "lastName": "Doe",
+          "position": "Developer",
+          "password": "TempPass123!"
+        },
+        {
+          "email": "jane.smith@company.com",
+          "firstName": "Jane",
+          "lastName": "Smith",
+          "position": "System Admin"
+        }
+      ]
+    },
+    {
+      "name": "HR",
+      "employees": [
+        {
+          "email": "sarah.jones@company.com",
+          "firstName": "Sarah",
+          "lastName": "Jones",
+          "position": "HR Manager"
+        }
+      ]
+    },
+    {
+      "name": "Sales",
+      "employees": [
+        {
+          "email": "mike.wilson@company.com",
+          "firstName": "Mike",
+          "lastName": "Wilson",
+          "position": "Sales Rep"
+        }
+      ]
+    }
+  ]
+}
