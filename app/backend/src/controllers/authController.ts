@@ -24,7 +24,7 @@ export const login = async (req: Request, res: Response) => {
     const token = jwt.sign(
       { userId: user.id },
       config.jwtSecret,
-      { expiresIn: config.jwtExpiresIn as string }
+      { expiresIn: '7d' }
     );
 
     await prisma.auditLog.create({
