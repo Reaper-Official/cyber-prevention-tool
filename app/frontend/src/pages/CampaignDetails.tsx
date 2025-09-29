@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { api } from '@/services/api';
-import { Download, CheckCircle, XCircle, Clock, Eye } from 'lucide-react';
+import { Download, CheckCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface CampaignDetails {
@@ -36,7 +36,6 @@ interface CampaignDetails {
 
 const CampaignDetails: React.FC = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [campaign, setCampaign] = useState<CampaignDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
