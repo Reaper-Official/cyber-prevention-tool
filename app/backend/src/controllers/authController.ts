@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { prisma } from '../lib/prisma.js';
 import { config } from '../config/index.js';
 import { AuthRequest } from '../middleware/auth.js';
@@ -21,9 +21,11 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
     }
 
-    const token = jwt.sign({ userId: user.id }, config.jwtSecret, {
+    const signOptions: SignOptions = {
       expiresIn: config.jwtExpiresIn,
-    });
+    };
+
+    const token = jwt.sign({ userId: user.id }, config.jwtSecret, signOptions);
 
     await prisma.auditLog.create({
       data: {

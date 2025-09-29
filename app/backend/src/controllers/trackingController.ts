@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 
 export const trackOpen = async (req: Request, res: Response) => {
   try {
-    const { targetId, campaignId } = req.body;
+    const { targetId } = req.body;
 
     await prisma.campaignTarget.update({
       where: { id: targetId },
@@ -22,7 +22,7 @@ export const trackOpen = async (req: Request, res: Response) => {
 
 export const trackClick = async (req: Request, res: Response) => {
   try {
-    const { targetId, campaignId } = req.body;
+    const { targetId } = req.body;
 
     await prisma.campaignTarget.update({
       where: { id: targetId },

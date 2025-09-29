@@ -50,7 +50,7 @@ export const createCampaign = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const getCampaigns = async (req: AuthRequest, res: Response) => {
+export const getCampaigns = async (_req: AuthRequest, res: Response) => {
   try {
     const campaigns = await prisma.campaign.findMany({
       include: {

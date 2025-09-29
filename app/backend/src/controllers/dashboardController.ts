@@ -5,7 +5,7 @@ import { CampaignService } from '../services/campaignService.js';
 
 const campaignService = new CampaignService();
 
-export const getDashboardStats = async (req: AuthRequest, res: Response) => {
+export const getDashboardStats = async (_req: AuthRequest, res: Response) => {
   try {
     const totalCampaigns = await prisma.campaign.count();
     const activeCampaigns = await prisma.campaign.count({

@@ -11,6 +11,22 @@ export interface AIProvider {
   generate(templateType: string, context: any): Promise<AIContent>;
 }
 
+function getFallbackContent(): AIContent {
+  return {
+    subject: 'Action requise - Vérification de votre compte',
+    body: `Bonjour,
+
+Nous avons détecté une activité inhabituelle sur votre compte. Pour des raisons de sécurité, veuillez vérifier vos informations dès que possible.
+
+Cliquez ici pour vérifier votre compte: [LIEN]
+
+Si vous n'effectuez pas cette action sous 24 heures, votre compte sera temporairement suspendu.
+
+Cordialement,
+L'équipe Sécurité`,
+  };
+}
+
 class GeminiProvider implements AIProvider {
   private apiKey: string;
 
@@ -18,8 +34,8 @@ class GeminiProvider implements AIProvider {
     this.apiKey = apiKey;
   }
 
-  async generate(templateType: string, context: any): Promise<AIContent> {
-    const prompt = this.buildPrompt(templateType, context);
+  async generate(_templateType: string, context: any): Promise<AIContent> {
+    const prompt = this.buildPrompt(context);
 
     try {
       const response = await axios.post(
@@ -33,13 +49,12 @@ class GeminiProvider implements AIProvider {
       return this.parseResponse(text);
     } catch (error) {
       console.error('Gemini API error:', error);
-      return this.getFallbackContent(templateType);
+      return getFallbackContent();
     }
   }
 
-  private buildPrompt(templateType: string, context: any): string {
-    if (templateType === 'phishing_email') {
-      return `Generate a realistic phishing simulation email for security training purposes. 
+  private buildPrompt(context: any): string {
+    return `Generate a realistic phishing simulation email for security training purposes. 
 Scenario: ${context.scenario || 'password reset'}
 Include:
 1. A compelling subject line
@@ -51,8 +66,6 @@ Return in JSON format:
   "subject": "...",
   "body": "..."
 }`;
-    }
-    return '';
   }
 
   private parseResponse(text: string): AIContent {
@@ -64,23 +77,7 @@ Return in JSON format:
     } catch (e) {
       console.error('Failed to parse AI response');
     }
-    return this.getFallbackContent('phishing_email');
-  }
-
-  private getFallbackContent(templateType: string): AIContent {
-    return {
-      subject: 'Action requise - Vérification de votre compte',
-      body: `Bonjour,
-
-Nous avons détecté une activité inhabituelle sur votre compte. Pour des raisons de sécurité, veuillez vérifier vos informations dès que possible.
-
-Cliquez ici pour vérifier votre compte: [LIEN]
-
-Si vous n'effectuez pas cette action sous 24 heures, votre compte sera temporairement suspendu.
-
-Cordialement,
-L'équipe Sécurité`,
-    };
+    return getFallbackContent();
   }
 }
 
@@ -91,7 +88,7 @@ class OpenAIProvider implements AIProvider {
     this.apiKey = apiKey;
   }
 
-  async generate(templateType: string, context: any): Promise<AIContent> {
+  async generate(_templateType: string, context: any): Promise<AIContent> {
     try {
       const response = await axios.post(
         'https://api.openai.com/v1/chat/completions',
@@ -125,7 +122,7 @@ class OpenAIProvider implements AIProvider {
       console.error('OpenAI API error:', error);
     }
 
-    return new GeminiProvider('').getFallbackContent(templateType);
+    return getFallbackContent();
   }
 }
 
@@ -136,7 +133,7 @@ class AnthropicProvider implements AIProvider {
     this.apiKey = apiKey;
   }
 
-  async generate(templateType: string, context: any): Promise<AIContent> {
+  async generate(_templateType: string, context: any): Promise<AIContent> {
     try {
       const response = await axios.post(
         'https://api.anthropic.com/v1/messages',
@@ -168,7 +165,7 @@ class AnthropicProvider implements AIProvider {
       console.error('Anthropic API error:', error);
     }
 
-    return new GeminiProvider('').getFallbackContent(templateType);
+    return getFallbackContent();
   }
 }
 
@@ -179,7 +176,7 @@ class OllamaProvider implements AIProvider {
     this.baseUrl = baseUrl;
   }
 
-  async generate(templateType: string, context: any): Promise<AIContent> {
+  async generate(_templateType: string, context: any): Promise<AIContent> {
     try {
       const response = await axios.post(`${this.baseUrl}/api/generate`, {
         model: 'llama2',
@@ -196,7 +193,7 @@ class OllamaProvider implements AIProvider {
       console.error('Ollama API error:', error);
     }
 
-    return new GeminiProvider('').getFallbackContent(templateType);
+    return getFallbackContent();
   }
 }
 

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { AuthRequest } from '../middleware/auth.js';
 
-export const getSettings = async (req: AuthRequest, res: Response) => {
+export const getSettings = async (_req: AuthRequest, res: Response) => {
   try {
     let settings = await prisma.settings.findFirst();
 
