@@ -1,395 +1,111 @@
-import { PrismaClient, Campaign, User } from '@prisma/client';
-import { AIProvider } from './aiProvider';
-import { ReportGenerator } from './reportGenerator';
-import { AppError } from '../middleware/errorHandler';
+import { prisma } from '../lib/prisma.js';
+import { EmailService } from './emailService.js';
 
 export class CampaignService {
-  constructor(
-    private prisma: PrismaClient,
-    private aiProvider: AIProvider = new AIProvider(),
-    private reportGenerator: ReportGenerator = new ReportGenerator()
-  ) {}
+  private emailService: EmailService;
 
-  async getAllCampaigns(userId: string) {
-    return await this.prisma.campaign.findMany({
-      include: {
-        createdBy: { select: { email: true, firstName: true, lastName: true } },
-        _count: { select: { targets: true } },
-        validation: true
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+  constructor() {
+    this.emailService = new EmailService();
   }
 
-  async getCampaign(campaignId: string) {
-    return await this.prisma.campaign.findUnique({
-      where: { id: campaignId },
-      include: {
-        targets: {
-          include: {
-            user: true
-          }
-        },
-        createdBy: true,
-        validation: {
-          include: {
-            validator: true
-          }
-        }
+  async calculateCampaignStats(campaignId: string) {
+    const targets = await prisma.campaignTarget.findMany({
+      where: { campaignId },
+    });
+
+    const totalTargets = targets.length;
+    const delivered = targets.filter((t) => t.status !== 'PENDING').length;
+    const opened = targets.filter((t) => t.openedAt).length;
+    const clicked = targets.filter((t) => t.clickedAt).length;
+    const reported = targets.filter((t) => t.status === 'REPORTED').length;
+
+    const fastReaders = targets.filter(
+      (t) => t.readingMetrics && (t.readingMetrics as any).fastRead
+    ).length;
+
+    const clickRate = totalTargets > 0 ? (clicked / totalTargets) * 100 : 0;
+    const openRate = totalTargets > 0 ? (opened / totalTargets) * 100 : 0;
+    const fastReadRate = opened > 0 ? (fastReaders / opened) * 100 : 0;
+
+    const totalReadingTime = targets.reduce((sum, t) => {
+      return sum + ((t.readingMetrics as any)?.timeSpent || 0);
+    }, 0);
+    const avgReadingTime = opened > 0 ? totalReadingTime / opened : 0;
+
+    const settings = await prisma.settings.findFirst();
+    const alerts: string[] = [];
+
+    if (settings) {
+      if (clickRate / 100 > (settings.alertThresholds as any).clickRate) {
+        alerts.push(
+          `Taux de clic élevé (${clickRate.toFixed(1)}%) - Formation recommandée`
+        );
       }
-    });
-  }
-
-  async createCampaign(data: {
-    name: string;
-    targetType: string;
-    targetIds?: string[];
-    createdById: string;
-    status: string;
-  }) {
-    // Créer la campagne
-    const campaign = await this.prisma.campaign.create({
-      data: {
-        name: data.name,
-        targetType: data.targetType,
-        status: data.status,
-        createdById: data.createdById,
-        subject: '',
-        body: '',
-        fromName: 'Security Team',
-        fromEmail: 'security@company.com',
-        sandbox: process.env.SANDBOX_MODE === 'true'
+      if (fastReadRate / 100 > (settings.alertThresholds as any).fastRead) {
+        alerts.push(
+          `Taux de lecture rapide élevé (${fastReadRate.toFixed(1)}%) - Formation obligatoire recommandée`
+        );
       }
-    });
-
-    // Ajouter les cibles
-    const targets = await this.getTargetUsers(data.targetType, data.targetIds);
-    
-    await this.prisma.campaignTarget.createMany({
-      data: targets.map(user => ({
-        campaignId: campaign.id,
-        userId: user.id,
-        trackingId: this.generateTrackingId(),
-        status: 'pending'
-      }))
-    });
-
-    return campaign;
-  }
-
-  async getTargetUsers(targetType: string, targetIds?: string[]): Promise<User[]> {
-    switch (targetType) {
-      case 'department':
-        return await this.prisma.user.findMany({
-          where: { departmentId: { in: targetIds } }
-        });
-      
-      case 'specific_users':
-        return await this.prisma.user.findMany({
-          where: { id: { in: targetIds } }
-        });
-      
-      case 'all':
-        return await this.prisma.user.findMany({
-          where: { active: true }
-        });
-      
-      default:
-        throw new AppError(400, 'Invalid target type');
-    }
-  }
-
-
-  async updateCampaignTemplate(campaignId: string, template: any) {
-    return await this.prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        subject: template.subject,
-        body: template.body,
-        landingPageContent: template.landingPage,
-        hasPersonalization: template.personalized || false
-      }
-    });
-  }
-
-  async submitForApproval(campaignId: string) {
-    const campaign = await this.getCampaign(campaignId);
-    
-    if (!campaign) {
-      throw new AppError(404, 'Campaign not found');
-    }
-
-    if (campaign.status !== 'draft') {
-      throw new AppError(400, 'Only draft campaigns can be submitted for approval');
-    }
-
-    return await this.prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: 'pending_approval',
-        submittedAt: new Date()
-      }
-    });
-  }
-
-  async validateCampaign(
-    campaignId: string,
-    validatorId: string,
-    approved: boolean,
-    comments?: string
-  ) {
-    const validation = await this.prisma.campaignValidation.create({
-      data: {
-        campaignId,
-        validatorId,
-        approved,
-        comments,
-        validatedAt: new Date()
-      }
-    });
-
-    await this.prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: approved ? 'approved' : 'rejected'
-      }
-    });
-
-    return validation;
-  }
-
-  async launchCampaign(campaignId: string) {
-    const campaign = await this.getCampaign(campaignId);
-    
-    if (!campaign) {
-      throw new AppError(404, 'Campaign not found');
-    }
-
-    // Mettre à jour le statut
-    const updatedCampaign = await this.prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: 'active',
-        launchedAt: new Date()
-      }
-    });
-
-    // Créer les tracking IDs pour chaque cible
-    const targets = await this.prisma.campaignTarget.findMany({
-      where: { campaignId }
-    });
-
-    for (const target of targets) {
-      const trackingId = this.generateTrackingId();
-      await this.prisma.campaignTarget.update({
-        where: { id: target.id },
-        data: { 
-          trackingId,
-          status: 'sent',
-          sentAt: new Date()
-        }
-      });
-    }
-
-    return updatedCampaign;
-  }
-
-  async getCampaignStats(campaignId: string) {
-    const targets = await this.prisma.campaignTarget.findMany({
-      where: { campaignId }
-    });
-
-    const stats = {
-      total: targets.length,
-      sent: targets.filter(t => t.status === 'sent').length,
-      opened: targets.filter(t => t.openedAt !== null).length,
-      clicked: targets.filter(t => t.clickedAt !== null).length,
-      submitted: targets.filter(t => t.submittedAt !== null).length,
-      fastReaders: targets.filter(t => t.fastRead === true).length,
-      averageReadTime: 0,
-      clickRate: 0,
-      submissionRate: 0,
-      fastReadRate: 0
-    };
-
-    if (stats.sent > 0) {
-      stats.clickRate = (stats.clicked / stats.sent) * 100;
-      stats.submissionRate = (stats.submitted / stats.sent) * 100;
-      stats.fastReadRate = (stats.fastReaders / stats.opened) * 100;
-    }
-
-    // Calculer le temps de lecture moyen
-    const readTimes = targets
-      .filter(t => t.readingTime !== null)
-      .map(t => t.readingTime as number);
-    
-    if (readTimes.length > 0) {
-      stats.averageReadTime = readTimes.reduce((a, b) => a + b, 0) / readTimes.length;
-    }
-
-    // Vérifier les seuils d'alerte
-    const alerts = [];
-    if (stats.clickRate > parseFloat(process.env.ALERT_THRESHOLD_CLICK_RATE || '70')) {
-      alerts.push({
-        type: 'high_click_rate',
-        message: `Taux de clic élevé: ${stats.clickRate.toFixed(1)}%`,
-        severity: 'warning'
-      });
-    }
-
-    if (stats.fastReadRate > parseFloat(process.env.ALERT_THRESHOLD_FAST_READ || '80')) {
-      alerts.push({
-        type: 'high_fast_read',
-        message: `Taux de lecture rapide élevé: ${stats.fastReadRate.toFixed(1)}%`,
-        severity: 'warning',
-        recommendation: 'Formation renforcée recommandée'
-      });
-    }
-
-    return { ...stats, alerts };
-  }
-
-  async generateReport(campaignId: string) {
-    const campaign = await this.getCampaign(campaignId);
-    const stats = await this.getCampaignStats(campaignId);
-    
-    if (!campaign) {
-      throw new AppError(404, 'Campaign not found');
-    }
-
-    // Générer le rapport via IA si des fast readers sont détectés
-    let aiAnalysis = null;
-    if (stats.fastReadRate > 50) {
-      aiAnalysis = await this.aiProvider.generateReportAnalysis({
-        campaign,
-        stats,
-        fastReaderDetails: await this.getFastReaderDetails(campaignId)
-      });
     }
 
     return {
-      campaign: {
-        id: campaign.id,
-        name: campaign.name,
-        launchedAt: campaign.launchedAt,
-        status: campaign.status
-      },
-      stats,
-      aiAnalysis,
-      recommendations: this.generateRecommendations(stats),
-      targetDetails: await this.getTargetDetails(campaignId)
+      totalTargets,
+      delivered,
+      opened,
+      clicked,
+      reported,
+      clickRate,
+      openRate,
+      fastReadRate,
+      avgReadingTime,
+      alerts,
     };
   }
 
-  async exportReport(campaignId: string, format: string) {
-    const report = await this.generateReport(campaignId);
-    
-    if (format === 'pdf') {
-      return await this.reportGenerator.generatePDF(report);
-    } else if (format === 'csv') {
-      return await this.reportGenerator.generateCSV(report);
-    }
-    
-    throw new AppError(400, 'Invalid export format');
+  async generateCampaignReport(campaignId: string) {
+    return this.calculateCampaignStats(campaignId);
   }
 
-  async getAvailableTemplates() {
-    return await this.prisma.emailTemplate.findMany({
-      where: { active: true },
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        difficulty: true,
-        description: true,
-        previewSubject: true
-      }
-    });
-  }
-
-  async getTemplate(templateId: string) {
-    const template = await this.prisma.emailTemplate.findUnique({
-      where: { id: templateId }
+  async publishCampaign(campaignId: string) {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      include: { targets: true },
     });
 
-    if (!template) {
-      throw new AppError(404, 'Template not found');
+    if (!campaign) {
+      throw new Error('Campaign not found');
     }
 
-    return template;
-  }
-
-  private generateTrackingId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-  }
-
-  private async getFastReaderDetails(campaignId: string) {
-    return await this.prisma.campaignTarget.findMany({
-      where: {
-        campaignId,
-        fastRead: true
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        status: 'ACTIVE',
+        publishedAt: new Date(),
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            department: true,
-            role: true
-          }
-        }
-      }
-    });
-  }
-
-  private async getTargetDetails(campaignId: string) {
-    const targets = await this.prisma.campaignTarget.findMany({
-      where: { campaignId },
-      include: {
-        user: {
-          select: {
-            email: true,
-            department: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
     });
 
-    return targets.map(t => ({
-      user: `${t.user.firstName} ${t.user.lastName}`,
-      email: t.user.email,
-      department: t.user.department?.name,
-      status: t.status,
-      opened: t.openedAt !== null,
-      clicked: t.clickedAt !== null,
-      submitted: t.submittedAt !== null,
-      fastRead: t.fastRead,
-      readingTime: t.readingTime
-    }));
-  }
+    if (!campaign.sandboxMode) {
+      for (const target of campaign.targets) {
+        await this.emailService.sendPhishingEmail(
+          target.email,
+          campaign.subject,
+          campaign.body,
+          target.id,
+          campaignId
+        );
 
-  private generateRecommendations(stats: any): string[] {
-    const recommendations = [];
-
-    if (stats.clickRate > 70) {
-      recommendations.push('Formation urgente recommandée pour l\'ensemble des employés');
+        await prisma.campaignTarget.update({
+          where: { id: target.id },
+          data: { status: 'DELIVERED' },
+        });
+      }
+    } else {
+      for (const target of campaign.targets) {
+        await prisma.campaignTarget.update({
+          where: { id: target.id },
+          data: { status: 'DELIVERED' },
+        });
+      }
     }
-
-    if (stats.fastReadRate > 80) {
-      recommendations.push('Session de sensibilisation approfondie nécessaire');
-      recommendations.push('Envisager une formation en présentiel avec consultant');
-    }
-
-    if (stats.submissionRate > 30) {
-      recommendations.push('Révision des politiques de sécurité des mots de passe');
-    }
-
-    if (stats.averageReadTime < 10) {
-      recommendations.push('Améliorer la communication sur l\'importance de la vigilance');
-    }
-
-    return recommendations;
   }
 }

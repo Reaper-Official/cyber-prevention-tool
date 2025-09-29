@@ -1,150 +1,113 @@
 #!/bin/bash
+
 set -e
 
 echo "🚀 PhishGuard Basic - Installation Script"
-echo "========================================="
+echo "=========================================="
+echo ""
 
 # Check prerequisites
-check_command() {
-    if ! command -v $1 &> /dev/null; then
-        echo "❌ $1 is required but not installed."
-        exit 1
-    fi
-}
-
 echo "📋 Checking prerequisites..."
-check_command docker
-check_command git
-check_command openssl
 
-# Check Docker Compose
-if docker compose version &> /dev/null; then
-    DOCKER_COMPOSE="docker compose"
-elif command -v docker-compose &> /dev/null; then
-    DOCKER_COMPOSE="docker-compose"
-else
-    echo "❌ Docker Compose is required but not installed."
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker is not installed. Please install Docker first."
     exit 1
 fi
 
-echo "✅ All prerequisites met"
+if ! command -v docker compose &> /dev/null; then
+    if ! command -v docker-compose &> /dev/null; then
+        echo "❌ Docker Compose is not installed. Please install Docker Compose first."
+        exit 1
+    fi
+    DOCKER_COMPOSE_CMD="docker-compose"
+else
+    DOCKER_COMPOSE_CMD="docker compose"
+fi
 
-# Setup environment
-if [ ! -f .env ]; then
-    echo "📝 Creating .env file from template..."
+if ! command -v git &> /dev/null; then
+    echo "❌ Git is not installed. Please install Git first."
+    exit 1
+fi
+
+echo "✅ All prerequisites are installed"
+echo ""
+
+# Clone repository if not already present
+if [ ! -f "docker-compose.yml" ]; then
+    echo "📥 Cloning repository..."
+    read -p "Enter repository URL: " REPO_URL
+    git clone "$REPO_URL" phishguard-basic
+    cd phishguard-basic
+fi
+
+# Create .env file
+if [ ! -f ".env" ]; then
+    echo "⚙️  Creating .env file..."
     cp .env.example .env
     
-    # Generate secure JWT secret
-    JWT_SECRET=$(openssl rand -base64 32)
-    sed -i.bak "s|JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" .env
-    
-    # Ask for AI configuration
     echo ""
-    echo "🤖 AI Provider Configuration"
-    echo "Available providers: GEMINI, OPENAI, CLAUDE, OLLAMA"
-    read -p "Enter AI provider (default: GEMINI): " AI_PROVIDER
+    echo "🔑 AI Provider Configuration"
+    echo "Available providers: GEMINI, OPENAI, ANTHROPIC, OLLAMA"
+    read -p "Select AI provider (default: GEMINI): " AI_PROVIDER
     AI_PROVIDER=${AI_PROVIDER:-GEMINI}
     
-    read -p "Enter AI API key (leave empty for sandbox mode): " AI_API_KEY
-    AI_API_KEY=${AI_API_KEY:-sandbox-key}
-    
-    sed -i.bak "s|AI_PROVIDER=.*|AI_PROVIDER=${AI_PROVIDER}|" .env
-    sed -i.bak "s|AI_API_KEY=.*|AI_API_KEY=${AI_API_KEY}|" .env
-    
-    # Ask for SMTP configuration
-    echo ""
-    echo "📧 Email Configuration (optional, press Enter to skip)"
-    read -p "SMTP Host: " SMTP_HOST
-    if [ ! -z "$SMTP_HOST" ]; then
-        read -p "SMTP Port (587): " SMTP_PORT
-        SMTP_PORT=${SMTP_PORT:-587}
-        read -p "SMTP User: " SMTP_USER
-        read -sp "SMTP Password: " SMTP_PASS
-        echo ""
-        
-        sed -i.bak "s|SMTP_HOST=.*|SMTP_HOST=${SMTP_HOST}|" .env
-        sed -i.bak "s|SMTP_PORT=.*|SMTP_PORT=${SMTP_PORT}|" .env
-        sed -i.bak "s|SMTP_USER=.*|SMTP_USER=${SMTP_USER}|" .env
-        sed -i.bak "s|SMTP_PASS=.*|SMTP_PASS=${SMTP_PASS}|" .env
+    if [ "$AI_PROVIDER" != "OLLAMA" ]; then
+        read -p "Enter your AI API key: " AI_API_KEY
+        sed -i.bak "s/AI_API_KEY=.*/AI_API_KEY=$AI_API_KEY/" .env
     fi
     
-    # Clean up backup files
+    sed -i.bak "s/AI_PROVIDER=.*/AI_PROVIDER=$AI_PROVIDER/" .env
+    
+    # Generate random JWT secret
+    JWT_SECRET=$(openssl rand -base64 32 2>/dev/null || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+    sed -i.bak "s/JWT_SECRET=.*/JWT_SECRET=$JWT_SECRET/" .env
+    
     rm -f .env.bak
     
-    echo "✅ Environment configured"
+    echo "✅ .env file created"
 else
-    echo "ℹ️ .env file already exists, skipping configuration"
+    echo "ℹ️  .env file already exists, skipping..."
 fi
 
-# Build and start containers
 echo ""
-echo "🐳 Building Docker containers..."
-$DOCKER_COMPOSE build
+echo "🐳 Building and starting Docker containers..."
+$DOCKER_COMPOSE_CMD up -d --build
 
 echo ""
-echo "🚀 Starting services..."
-$DOCKER_COMPOSE up -d
-
-# Wait for services to be ready
-echo ""
-echo "⏳ Waiting for services to start..."
+echo "⏳ Waiting for database to be ready..."
 sleep 10
 
-# Run database migrations
 echo ""
-echo "🗃️ Running database migrations..."
-$DOCKER_COMPOSE exec -T backend npx prisma migrate deploy || \
-    $DOCKER_COMPOSE exec -T backend npx prisma migrate dev --name init
+echo "🗄️  Running database migrations..."
+$DOCKER_COMPOSE_CMD exec -T backend npx prisma migrate deploy
 
-# Seed database
 echo ""
-echo "🌱 Seeding database with initial data..."
-$DOCKER_COMPOSE exec -T backend npx prisma db seed
+echo "🌱 Seeding database..."
+$DOCKER_COMPOSE_CMD exec -T backend npm run prisma:seed
 
-# Get admin credentials
-ADMIN_EMAIL=$(grep DEFAULT_ADMIN_EMAIL .env | cut -d '=' -f2)
-ADMIN_PASSWORD=$(grep DEFAULT_ADMIN_PASSWORD .env | cut -d '=' -f2)
-
-# Health check
 echo ""
-echo "🔍 Running health check..."
-if curl -s http://localhost:3000/health > /dev/null; then
-    echo "✅ Backend is running"
-else
-    echo "⚠️ Backend health check failed"
-fi
-
-if curl -s http://localhost:5173 > /dev/null; then
-    echo "✅ Frontend is running"
-else
-    echo "⚠️ Frontend health check failed"
-fi
-
-# Display success message
+echo "✅ Installation completed successfully!"
 echo ""
-echo "========================================="
-echo "✨ PhishGuard Basic installed successfully!"
-echo "========================================="
+echo "=========================================="
+echo "📋 Access Information"
+echo "=========================================="
+echo "Frontend URL: http://localhost"
+echo "Backend API: http://localhost:4000"
 echo ""
-echo "🌐 Access URLs:"
-echo "   Frontend: http://localhost:5173"
-echo "   Backend API: http://localhost:3000"
+echo "Default Admin Credentials:"
+echo "  Email: admin@local.test"
+echo "  Password: Admin123!"
 echo ""
-echo "🔐 Admin Credentials:"
-echo "   Email: ${ADMIN_EMAIL}"
-echo "   Password: ${ADMIN_PASSWORD}"
+echo "⚠️  IMPORTANT SECURITY NOTES:"
+echo "  1. Change the default admin password immediately"
+echo "  2. This tool is for INTERNAL USE ONLY"
+echo "  3. All campaigns require RH/Security approval"
+echo "  4. Sandbox mode is enabled by default"
+echo "  5. Never use for unauthorized phishing attacks"
 echo ""
-echo "⚠️ IMPORTANT:"
-echo "   1. Change the admin password after first login"
-echo "   2. Configure SMTP for email sending (currently in SANDBOX mode)"
-echo "   3. Review security settings in .env file"
+echo "📚 Documentation: See README.md"
+echo "=========================================="
 echo ""
-echo "📚 Next steps:"
-echo "   1. Login to the dashboard"
-echo "   2. Import employee list (CSV)"
-echo "   3. Create your first campaign"
-echo "   4. Review documentation in /docs"
-echo ""
-echo "🛑 To stop services: $DOCKER_COMPOSE down"
-echo "📊 To view logs: $DOCKER_COMPOSE logs -f"
+echo "To stop the application: $DOCKER_COMPOSE_CMD down"
+echo "To view logs: $DOCKER_COMPOSE_CMD logs -f"
 echo ""
