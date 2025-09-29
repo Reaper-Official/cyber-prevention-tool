@@ -1,13 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-export class AppError extends Error {
-  constructor(public statusCode: number, message: string) {
-    super(message);
-  }
-}
-export const errorHandler = (err: Error | AppError, req: Request, res: Response, next: NextFunction) => {
-  if (err instanceof AppError) {
-    return res.status(err.statusCode).json({ error: err.message });
-  }
-  console.error(err);
-  res.status(500).json({ error: 'Internal error' });
+
+export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Error:', err);
+
+  res.status(500).json({
+    message: 'Erreur interne du serveur',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+  });
 };

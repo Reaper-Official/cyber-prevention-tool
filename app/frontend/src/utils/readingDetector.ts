@@ -1,217 +1,97 @@
-interface ReadingMetrics {
+export interface ReadingMetrics {
   openedAt: number;
   closedAt?: number;
   timeSpent: number;
-  wordCount: number;
-  scrollDepth: number;
-  focusTime: number;
-  blurCount: number;
+  visibleWords: number;
   secondsPerWord: number;
   fastRead: boolean;
+  scrollEvents: number;
+  focusTime: number;
+  blurTime: number;
 }
 
 export class ReadingDetector {
-  private metrics: ReadingMetrics;
-  private focusTimer: number | null = null;
-  private scrollHandler: ((e: Event) => void) | null = null;
-  private trackingId: string;
+  private openedAt: number;
+  private focusStartTime: number | null = null;
+  private totalFocusTime = 0;
+  private totalBlurTime = 0;
+  private scrollEvents = 0;
   private minSecondsPerWord: number;
+  private active = true;
 
-  constructor(trackingId: string, minSecondsPerWord: number = 3) {
-    this.trackingId = trackingId;
+  constructor(minSecondsPerWord = 0.25) {
+    this.openedAt = Date.now();
     this.minSecondsPerWord = minSecondsPerWord;
-    
-    this.metrics = {
-      openedAt: Date.now(),
-      timeSpent: 0,
-      wordCount: 0,
-      scrollDepth: 0,
-      focusTime: 0,
-      blurCount: 0,
-      secondsPerWord: 0,
-      fastRead: false
-    };
-
-    this.initialize();
+    this.setupListeners();
   }
 
-  private initialize() {
-    // Compter les mots dans le contenu visible
-    this.metrics.wordCount = this.countVisibleWords();
-
-    // Tracking du focus/blur
-    this.setupFocusTracking();
-
-    // Tracking du scroll
-    this.setupScrollTracking();
-
-    // Envoyer les métriques quand l'utilisateur quitte
-    this.setupUnloadTracking();
+  private setupListeners() {
+    window.addEventListener('focus', this.handleFocus);
+    window.addEventListener('blur', this.handleBlur);
+    window.addEventListener('scroll', this.handleScroll);
+    window.addEventListener('beforeunload', this.handleUnload);
+    this.handleFocus();
   }
+
+  private handleFocus = () => {
+    if (this.active) {
+      this.focusStartTime = Date.now();
+    }
+  };
+
+  private handleBlur = () => {
+    if (this.focusStartTime && this.active) {
+      this.totalFocusTime += Date.now() - this.focusStartTime;
+      this.focusStartTime = null;
+    }
+  };
+
+  private handleScroll = () => {
+    if (this.active) {
+      this.scrollEvents++;
+    }
+  };
+
+  private handleUnload = () => {
+    this.cleanup();
+  };
 
   private countVisibleWords(): number {
-    const content = document.querySelector('.email-content, .landing-content, article');
-    if (!content) return 0;
-
-    const text = content.textContent || '';
-    const words = text.trim().split(/\s+/).filter(word => word.length > 0);
-    return words.length;
+    const bodyText = document.body.innerText || '';
+    const words = bodyText.trim().split(/\s+/);
+    return words.filter((w) => w.length > 0).length;
   }
 
-  private setupFocusTracking() {
-    let focusStartTime = Date.now();
-
-    const handleFocus = () => {
-      focusStartTime = Date.now();
-    };
-
-    const handleBlur = () => {
-      this.metrics.focusTime += Date.now() - focusStartTime;
-      this.metrics.blurCount++;
-    };
-
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('blur', handleBlur);
-
-    // Considérer la page comme ayant le focus au départ
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        handleBlur();
-      } else {
-        handleFocus();
-      }
-    });
-  }
-
-  private setupScrollTracking() {
-    let maxScroll = 0;
-
-    this.scrollHandler = () => {
-      const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-      const currentScroll = window.scrollY;
-      const scrollPercentage = scrollHeight > 0 ? (currentScroll / scrollHeight) * 100 : 0;
-
-      if (scrollPercentage > maxScroll) {
-        maxScroll = scrollPercentage;
-        this.metrics.scrollDepth = Math.min(100, Math.round(scrollPercentage));
-      }
-    };
-
-    window.addEventListener('scroll', this.scrollHandler, { passive: true });
-  }
-
-  private setupUnloadTracking() {
-    const sendMetrics = () => {
-      this.calculateFinalMetrics();
-      this.sendToBackend();
-    };
-
-    // Envoyer quand l'utilisateur quitte la page
-    window.addEventListener('beforeunload', sendMetrics);
-    window.addEventListener('pagehide', sendMetrics);
-
-    // Envoyer périodiquement (toutes les 30 secondes)
-    this.focusTimer = window.setInterval(() => {
-      this.calculateFinalMetrics();
-      this.sendToBackend();
-    }, 30000);
-  }
-
-  private calculateFinalMetrics() {
-    this.metrics.closedAt = Date.now();
-    this.metrics.timeSpent = Math.round((this.metrics.closedAt - this.metrics.openedAt) / 1000);
-
-    // Calculer le temps par mot
-    if (this.metrics.wordCount > 0 && this.metrics.timeSpent > 0) {
-      this.metrics.secondsPerWord = this.metrics.timeSpent / this.metrics.wordCount;
+  public getMetrics(): ReadingMetrics {
+    const now = Date.now();
+    if (this.focusStartTime) {
+      this.totalFocusTime += now - this.focusStartTime;
+      this.focusStartTime = now;
     }
 
-    // Déterminer si c'est une lecture rapide
-    const tooFast = this.metrics.secondsPerWord < this.minSecondsPerWord;
-    const lowScroll = this.metrics.scrollDepth < 50;
-    const shortFocus = this.metrics.focusTime < (this.metrics.timeSpent * 0.5 * 1000);
-    const manyBlurs = this.metrics.blurCount > 5;
+    const timeSpent = (now - this.openedAt) / 1000;
+    const visibleWords = this.countVisibleWords();
+    const secondsPerWord = visibleWords > 0 ? timeSpent / visibleWords : 0;
+    const fastRead = secondsPerWord < this.minSecondsPerWord && visibleWords > 50;
 
-    // Lecture rapide si plusieurs indicateurs sont présents
-    this.metrics.fastRead = (tooFast && lowScroll) || (tooFast && shortFocus) || (tooFast && manyBlurs);
+    return {
+      openedAt: this.openedAt,
+      closedAt: now,
+      timeSpent,
+      visibleWords,
+      secondsPerWord,
+      fastRead,
+      scrollEvents: this.scrollEvents,
+      focusTime: this.totalFocusTime / 1000,
+      blurTime: this.totalBlurTime / 1000,
+    };
   }
 
-  public async sendToBackend() {
-    try {
-      const response = await fetch('/api/track/reading', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          trackingId: this.trackingId,
-          timeSpent: this.metrics.timeSpent,
-          wordCount: this.metrics.wordCount,
-          scrollDepth: this.metrics.scrollDepth,
-          focusTime: Math.round(this.metrics.focusTime / 1000),
-          secondsPerWord: this.metrics.secondsPerWord,
-          fastRead: this.metrics.fastRead
-        })
-      });
-
-      const data = await response.json();
-      
-      // Si lecture rapide détectée, afficher un message
-      if (data.fastRead) {
-        this.showFastReadWarning();
-      }
-    } catch (error) {
-      console.error('Failed to send reading metrics:', error);
-    }
+  public cleanup() {
+    this.active = false;
+    window.removeEventListener('focus', this.handleFocus);
+    window.removeEventListener('blur', this.handleBlur);
+    window.removeEventListener('scroll', this.handleScroll);
+    window.removeEventListener('beforeunload', this.handleUnload);
   }
-
-  private showFastReadWarning() {
-    // Créer un toast ou modal pour informer l'utilisateur
-    const warning = document.createElement('div');
-    warning.className = 'fast-read-warning';
-    warning.innerHTML = `
-      <div style="
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #FEF3C7;
-        border: 1px solid #F59E0B;
-        border-radius: 8px;
-        padding: 16px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        z-index: 9999;
-        max-width: 400px;
-      ">
-        <h4 style="margin: 0 0 8px 0; color: #92400E;">
-          ⚠️ Lecture rapide détectée
-        </h4>
-        <p style="margin: 0; color: #78350F; font-size: 14px;">
-          Une formation complémentaire sera programmée pour améliorer votre vigilance face au phishing.
-        </p>
-      </div>
-    `;
-    
-    document.body.appendChild(warning);
-    
-    // Retirer l'avertissement après 5 secondes
-    setTimeout(() => {
-      warning.remove();
-    }, 5000);
-  }
-
-  public destroy() {
-    // Nettoyer les event listeners
-    if (this.scrollHandler) {
-      window.removeEventListener('scroll', this.scrollHandler);
-    }
-    
-    if (this.focusTimer) {
-      clearInterval(this.focusTimer);
-    }
-  }
-}
-
-// Fonction utilitaire pour initialiser le tracking sur une page
-export function initializeReadingTracking(trackingId: string): ReadingDetector {
-  return new ReadingDetector(trackingId);
 }

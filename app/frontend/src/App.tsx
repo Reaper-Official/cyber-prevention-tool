@@ -1,30 +1,44 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
-import { Layout } from './components/Layout';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import CampaignsPage from './pages/CampaignsPage';
-import CampaignDetailPage from './pages/CampaignDetailPage';
-import CreateCampaignPage from './pages/CreateCampaignPage';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Campaigns from './pages/Campaigns';
+import CampaignCreate from './pages/CampaignCreate';
+import CampaignDetails from './pages/CampaignDetails';
+import Training from './pages/Training';
+import Users from './pages/Users';
+import Settings from './pages/Settings';
+import Layout from './components/Layout';
 
-function App() {
+const App: React.FC = () => {
   return (
-    <BrowserRouter>
-      <AuthProvider>
+    <AuthProvider>
+      <Router>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <Layout />
+              </PrivateRoute>
+            }
+          >
             <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="campaigns" element={<CampaignsPage />} />
-            <Route path="campaigns/create" element={<CreateCampaignPage />} />
-            <Route path="campaigns/:id" element={<CampaignDetailPage />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="campaigns" element={<Campaigns />} />
+            <Route path="campaigns/create" element={<CampaignCreate />} />
+            <Route path="campaigns/:id" element={<CampaignDetails />} />
+            <Route path="training" element={<Training />} />
+            <Route path="users" element={<Users />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+      </Router>
+    </AuthProvider>
   );
-}
+};
 
 export default App;

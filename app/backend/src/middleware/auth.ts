@@ -1,58 +1,50 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
-import { AppError } from './errorHandler';
-
-const prisma = new PrismaClient();
+import { config } from '../config/index.js';
+import { prisma } from '../lib/prisma.js';
 
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+  };
 }
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    
+
     if (!token) {
-      throw new AppError(401, 'Authentication required');
+      return res.status(401).json({ message: 'Token manquant' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    
+    const decoded = jwt.verify(token, config.jwtSecret) as { userId: string };
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      include: { role: true }
+      select: { id: true, email: true, role: true },
     });
 
-    if (!user || !user.active) {
-      throw new AppError(401, 'Invalid token');
+    if (!user) {
+      return res.status(401).json({ message: 'Utilisateur non trouvé' });
     }
 
-    req.user = {
-      id: user.id,
-      email: user.email,
-      role: user.role.name,
-      permissions: user.role.permissions
-    };
-
+    req.user = user;
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      next(new AppError(401, 'Invalid token'));
-    } else {
-      next(error);
-    }
+    return res.status(401).json({ message: 'Token invalide' });
   }
 };
 
-export const authorize = (roles: string[]) => {
+export const authorize = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return next(new AppError(401, 'Authentication required'));
+      return res.status(401).json({ message: 'Non authentifié' });
     }
 
     if (!roles.includes(req.user.role)) {
-      return next(new AppError(403, 'Insufficient permissions'));
+      return res.status(403).json({ message: 'Accès refusé' });
     }
 
     next();
