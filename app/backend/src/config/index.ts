@@ -18,4 +18,4 @@ export const config = {
   smtpPassword: process.env.SMTP_PASSWORD,
   smtpFrom: process.env.SMTP_FROM || 'noreply@phishguard.local',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
-};
+} as const;
