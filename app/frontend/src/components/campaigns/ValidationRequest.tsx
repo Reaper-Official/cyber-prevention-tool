@@ -57,14 +57,14 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({ campaignId, campa
   return (
     <div className="text-center py-12">
       {status === 'pending' && (
-        <>
+        <div>
           <Clock className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             Campagne en attente de validation
           </h2>
           <p className="text-gray-600 mb-6">
-            La campagne "{campaignName}" a été créée avec succès et est en attente de validation
-            par l'équipe RH/Sécurité.
+            La campagne &quot;{campaignName}&quot; a été créée avec succès et est en attente de validation
+            par l&apos;équipe RH/Sécurité.
           </p>
           
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
@@ -75,32 +75,32 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({ campaignId, campa
               <li>• La campagne sera lancée après approbation</li>
             </ul>
           </div>
-        </>
+        </div>
       )}
 
       {status === 'approved' && (
-        <>
+        <div>
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             Campagne approuvée!
           </h2>
           <p className="text-gray-600 mb-6">
-            La campagne "{campaignName}" a été approuvée et sera lancée selon le planning défini.
+            La campagne &quot;{campaignName}&quot; a été approuvée et sera lancée selon le planning défini.
           </p>
-        </>
+        </div>
       )}
 
       {status === 'rejected' && (
-        <>
+        <div>
           <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             Campagne rejetée
           </h2>
           <p className="text-gray-600 mb-6">
-            La campagne "{campaignName}" a été rejetée. Veuillez consulter les commentaires
+            La campagne &quot;{campaignName}&quot; a été rejetée. Veuillez consulter les commentaires
             du validateur et apporter les modifications nécessaires.
           </p>
-        </>
+        </div>
       )}
 
       <div className="mt-8 space-x-4">

@@ -74,8 +74,8 @@ const CampaignPreview: React.FC<CampaignPreviewProps> = ({ campaignData, onEdit 
       </div>
 
       {/* Template */}
-      <div className="bg-white border rounded-lg p-6"></div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="bg-white border rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Template</h3>
           <button
             onClick={() => onEdit(3)}
@@ -98,7 +98,7 @@ const CampaignPreview: React.FC<CampaignPreviewProps> = ({ campaignData, onEdit 
           </div>
           
           {campaignData.customTemplate && (
-            <>
+            <div className="space-y-3">
               <div>
                 <span className="text-gray-600">Sujet:</span>
                 <p className="mt-1 p-2 bg-gray-50 rounded">
@@ -115,7 +115,7 @@ const CampaignPreview: React.FC<CampaignPreviewProps> = ({ campaignData, onEdit 
                   }}
                 />
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>
