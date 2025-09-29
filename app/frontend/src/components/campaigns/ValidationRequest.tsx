@@ -7,10 +7,7 @@ interface ValidationRequestProps {
   campaignName: string;
 }
 
-const ValidationRequest: React.FC<ValidationRequestProps> = ({ 
-  campaignId, 
-  campaignName 
-}) => {
+const ValidationRequest: React.FC<ValidationRequestProps> = ({ campaignId, campaignName }) => {
   const [status, setStatus] = useState<string>('pending');
   const [loading, setLoading] = useState(false);
 
@@ -57,18 +54,17 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({
     );
   }
 
-  let statusContent = null;
-
+  let content = null;
+  
   if (status === 'pending') {
-    statusContent = (
-      <React.Fragment>
+    content = (
+      <>
         <Clock className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
           Campagne en attente de validation
         </h2>
         <p className="text-gray-600 mb-6">
-          La campagne {campaignName} a été créée avec succès et est en attente 
-          de validation par l équipe RH/Sécurité.
+          La campagne {campaignName} a été créée avec succès et est en attente de validation.
         </p>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
           <h3 className="font-semibold text-blue-900 mb-2">Prochaines étapes:</h3>
@@ -78,39 +74,37 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({
             <li>• La campagne sera lancée après approbation</li>
           </ul>
         </div>
-      </React.Fragment>
+      </>
     );
   } else if (status === 'approved') {
-    statusContent = (
-      <React.Fragment>
+    content = (
+      <>
         <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
           Campagne approuvée!
         </h2>
         <p className="text-gray-600 mb-6">
-          La campagne {campaignName} a été approuvée et sera lancée selon 
-          le planning défini.
+          La campagne {campaignName} a été approuvée et sera lancée selon le planning défini.
         </p>
-      </React.Fragment>
+      </>
     );
   } else if (status === 'rejected') {
-    statusContent = (
-      <React.Fragment>
+    content = (
+      <>
         <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
           Campagne rejetée
         </h2>
         <p className="text-gray-600 mb-6">
-          La campagne {campaignName} a été rejetée. Veuillez consulter les 
-          commentaires du validateur et apporter les modifications nécessaires.
+          La campagne {campaignName} a été rejetée. Veuillez consulter les commentaires.
         </p>
-      </React.Fragment>
+      </>
     );
   }
 
   return (
     <div className="text-center py-12">
-      {statusContent}
+      {content}
       <div className="mt-8 space-x-4">
         
           href="/campaigns"
@@ -118,14 +112,14 @@ const ValidationRequest: React.FC<ValidationRequestProps> = ({
         >
           Retour aux campagnes
         </a>
-        {campaignId ? (
+        {campaignId && (
           
             href={`/campaigns/${campaignId}`}
             className="inline-block px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             Voir les détails
           </a>
-        ) : null}
+        )}
       </div>
     </div>
   );
