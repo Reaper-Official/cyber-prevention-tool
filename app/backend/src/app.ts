@@ -11,10 +11,14 @@ import trainingRoutes from './routes/training.js';
 import aiRoutes from './routes/ai.js';
 import dashboardRoutes from './routes/dashboard.js';
 import settingsRoutes from './routes/settings.js';
+import templateRoutes from './routes/templates.js';
+import quizRoutes from './routes/quiz.js';
+import gamificationRoutes from './routes/gamification.js';
+import notificationRoutes from './routes/notifications.js';
 
 export const app = express();
 
-app.set('trust proxy', 1); // <-- Ajoutez cette ligne
+app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(cors());
@@ -34,6 +38,10 @@ app.use('/api/training', trainingRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/quiz', quizRoutes);
+app.use('/api/gamification', gamificationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use(errorHandler);
 
