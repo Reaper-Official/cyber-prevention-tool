@@ -8,30 +8,52 @@ const campaignService = new CampaignService();
 
 export const createCampaign = async (req: AuthRequest, res: Response) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const { name, templateId, targetDepartments, sandboxMode, scheduledFor } = req.body;
+
+    if (!name || !templateId || !targetDepartments || targetDepartments.length === 0) {
+      return res.status(400).json({ message: 'Nom, template et départements requis' });
     }
 
-    const { name, subject, body, targets, sandboxMode } = req.body;
+    // Récupérer le template
+    const template = await prisma.emailTemplate.findUnique({
+      where: { id: templateId },
+    });
+
+    if (!template) {
+      return res.status(404).json({ message: 'Template non trouvé' });
+    }
+
+    // Récupérer les utilisateurs des départements ciblés
+    const users = await prisma.user.findMany({
+      where: {
+        department: { in: targetDepartments },
+      },
+    });
 
     const campaign = await prisma.campaign.create({
       data: {
         name,
-        subject,
-        body,
-        sandboxMode,
+        subject: template.subject,
+        body: template.body,
+        templateId,
+        targetDepartments,
+        sandboxMode: sandboxMode ?? true,
+        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
         status: 'DRAFT',
         createdById: req.user!.id,
         targets: {
-          create: targets.map((email: string) => ({
-            email,
+          create: users.map((user) => ({
+            email: user.email,
+            userId: user.id,
             status: 'PENDING',
           })),
         },
       },
       include: {
         targets: true,
+        _count: {
+          select: { targets: true },
+        },
       },
     });
 
@@ -61,21 +83,7 @@ export const getCampaigns = async (_req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    const campaignsWithStats = await Promise.all(
-      campaigns.map(async (campaign) => {
-        const stats = await campaignService.calculateCampaignStats(campaign.id);
-        return {
-          id: campaign.id,
-          name: campaign.name,
-          status: campaign.status,
-          createdAt: campaign.createdAt,
-          targetCount: campaign._count.targets,
-          clickRate: stats.clickRate,
-        };
-      })
-    );
-
-    res.json(campaignsWithStats);
+    res.json(campaigns);
   } catch (error) {
     console.error('GetCampaigns error:', error);
     res.status(500).json({ message: 'Erreur lors de la récupération des campagnes' });
@@ -97,16 +105,21 @@ export const getCampaignById = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Campagne non trouvée' });
     }
 
-    const report = await campaignService.generateCampaignReport(id);
-
-    res.json({
-      ...campaign,
-      report,
-      targets: campaign.targets,
-    });
+    res.json(campaign);
   } catch (error) {
     console.error('GetCampaignById error:', error);
     res.status(500).json({ message: 'Erreur lors de la récupération de la campagne' });
+  }
+};
+
+export const getCampaignStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const stats = await campaignService.calculateCampaignStats(id);
+    res.json(stats);
+  } catch (error) {
+    console.error('GetCampaignStats error:', error);
+    res.status(500).json({ message: 'Erreur' });
   }
 };
 
@@ -134,7 +147,7 @@ export const validateCampaign = async (req: AuthRequest, res: Response) => {
     res.json(campaign);
   } catch (error) {
     console.error('ValidateCampaign error:', error);
-    res.status(500).json({ message: 'Erreur lors de la validation de la campagne' });
+    res.status(500).json({ message: 'Erreur lors de la validation' });
   }
 };
 
@@ -142,32 +155,25 @@ export const publishCampaign = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    const campaign = await prisma.campaign.findUnique({
+    const campaign = await prisma.campaign.update({
       where: { id },
-      include: { targets: true },
+      data: {
+        status: 'ACTIVE',
+        publishedAt: new Date(),
+      },
     });
-
-    if (!campaign) {
-      return res.status(404).json({ message: 'Campagne non trouvée' });
-    }
-
-    if (campaign.status !== 'APPROVED') {
-      return res.status(400).json({ message: 'La campagne doit être approuvée avant publication' });
-    }
-
-    await campaignService.publishCampaign(id);
 
     await prisma.auditLog.create({
       data: {
         userId: req.user!.id,
         action: 'PUBLISH_CAMPAIGN',
-        details: { campaignId: id, sandboxMode: campaign.sandboxMode },
+        details: { campaignId: id },
       },
     });
 
-    res.json({ message: 'Campagne publiée avec succès' });
+    res.json(campaign);
   } catch (error) {
     console.error('PublishCampaign error:', error);
-    res.status(500).json({ message: 'Erreur lors de la publication de la campagne' });
+    res.status(500).json({ message: 'Erreur lors de la publication' });
   }
 };
