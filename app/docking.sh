@@ -1,16 +1,12 @@
-cd /workspaces/cyber-prevention-tool/app
+# Nettoyer et redémarrer
+docker compose down -v
+docker compose up -d --build
 
-docker compose exec backend npx prisma db push
-docker compose exec backend npx prisma generate
-sleep 10
+# Voir les logs d'un service spécifique
+docker compose logs backend
+docker compose logs frontend
+docker compose logs db
 
-docker compose down
-sleep 10
-docker rmi app-backend app-frontend
-sleep 10
-docker compose build --no-cache backend
-docker compose build --no-cache frontend
-docker compose up -d
-sleep 20
-docker compose exec backend npx prisma db push
-docker compose exec backend node prisma/seed.ts
+# Exécuter les migrations manuellement
+docker compose exec backend npx prisma migrate deploy
+docker compose exec backend npm run prisma:seed
