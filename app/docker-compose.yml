@@ -27,6 +27,18 @@ services:
       timeout: 5s
       retries: 5
 
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -37,6 +49,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/phishguard
       REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
       PORT: 4000
     ports:
       - "4000:4000"
@@ -44,6 +58,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      mailhog:
         condition: service_healthy
     volumes:
       - ./backend:/app
@@ -57,7 +73,7 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-    depends_on:
+      depends_on:
       - backend
 
 volumes:

@@ -8,13 +8,14 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      String   @default("EMPLOYEE")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  name       String
+  role       String   @default("EMPLOYEE")
+  department String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   campaignsCreated    Campaign[]        @relation("CampaignCreator")
   campaignsValidated  Campaign[]        @relation("CampaignValidator")
@@ -23,6 +24,7 @@ model User {
 
   @@index([email])
   @@index([role])
+  @@index([department])
 }
 
 model Campaign {
@@ -32,6 +34,7 @@ model Campaign {
   body        String    @db.Text
   status      String    @default("DRAFT")
   sandboxMode Boolean   @default(true)
+  targetDepartments String[]
   createdAt   DateTime  @default(now())
   publishedAt DateTime?
   validatedAt DateTime?
@@ -70,6 +73,7 @@ model TrainingModule {
   content     String   @db.Text
   duration    Int
   order       Int      @default(0)
+  minReadingTime Int   @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -84,6 +88,8 @@ model TrainingProgress {
   moduleId    String
   completed   Boolean   @default(false)
   completedAt DateTime?
+  readingTime Int       @default(0)
+  fastRead    Boolean   @default(false)
   createdAt   DateTime  @default(now())
 
   user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -114,6 +120,11 @@ model Settings {
   sandboxMode       Boolean  @default(true)
   requireApproval   Boolean  @default(true)
   aiProvider        String   @default("GEMINI")
+  smtpHost          String?
+  smtpPort          Int      @default(587)
+  smtpUser          String?
+  smtpPassword      String?
+  smtpFrom          String   @default("noreply@phishguard.local")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
