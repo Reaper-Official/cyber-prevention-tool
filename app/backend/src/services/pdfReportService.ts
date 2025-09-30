@@ -33,7 +33,6 @@ export class PDFReportService {
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      // Header
       doc
         .fontSize(24)
         .fillColor(settings?.primaryColor || '#0ea5e9')
@@ -47,7 +46,6 @@ export class PDFReportService {
 
       doc.moveDown(2);
 
-      // Campaign Info
       doc.fontSize(14).text('Informations de la Campagne', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(11);
@@ -63,7 +61,6 @@ export class PDFReportService {
 
       doc.moveDown(2);
 
-      // Statistics
       doc.fontSize(14).text('Statistiques Globales', { underline: true });
       doc.moveDown(0.5);
 
@@ -84,7 +81,6 @@ export class PDFReportService {
 
       doc.moveDown(2);
 
-      // Alerts
       if (stats.alerts.length > 0) {
         doc
           .fontSize(14)
@@ -100,7 +96,6 @@ export class PDFReportService {
         doc.moveDown(2);
       }
 
-      // Recommendations
       doc.fontSize(14).text('Recommandations', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(10);
@@ -127,7 +122,6 @@ export class PDFReportService {
 
       doc.moveDown(2);
 
-      // Top Performers
       const topPerformers = campaign.targets
         .filter((t) => t.status === 'REPORTED')
         .slice(0, 5);
@@ -144,7 +138,6 @@ export class PDFReportService {
         });
       }
 
-      // Footer
       doc
         .moveDown(3)
         .fontSize(8)
@@ -183,6 +176,8 @@ export class PDFReportService {
       where: { userId, status: 'REPORTED' },
     });
 
+    const totalModules = await prisma.trainingModule.count();
+
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const buffers: Buffer[] = [];
@@ -191,7 +186,6 @@ export class PDFReportService {
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      // Header
       doc
         .fontSize(24)
         .fillColor(settings?.primaryColor || '#0ea5e9')
@@ -205,7 +199,6 @@ export class PDFReportService {
 
       doc.moveDown(2);
 
-      // User Info
       doc.fontSize(14).text('Informations', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(11);
@@ -215,7 +208,6 @@ export class PDFReportService {
 
       doc.moveDown(2);
 
-      // Gamification Stats
       doc.fontSize(14).text('Progression', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(11);
@@ -226,12 +218,10 @@ export class PDFReportService {
 
       doc.moveDown(2);
 
-      // Training Progress
       doc.fontSize(14).text('Formation', { underline: true });
       doc.moveDown(0.5);
 
       const completedModules = user.trainingProgress.filter((p) => p.completed).length;
-      const totalModules = await prisma.trainingModule.count();
 
       doc.fontSize(11);
       doc.text(`Modules complétés: ${completedModules}/${totalModules}`);
@@ -245,7 +235,6 @@ export class PDFReportService {
 
       doc.moveDown(2);
 
-      // Quiz Results
       if (user.quizAttempts.length > 0) {
         doc.fontSize(14).text('Résultats des Quiz', { underline: true });
         doc.moveDown(0.5);
@@ -258,7 +247,6 @@ export class PDFReportService {
         doc.text(`Réussites: ${user.quizAttempts.filter((a) => a.passed).length}`);
       }
 
-      // Footer
       doc
         .moveDown(3)
         .fontSize(8)
