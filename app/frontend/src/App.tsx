@@ -1,54 +1,58 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import Layout from './components/Layout';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Campaigns from './pages/Campaigns';
-import CreateCampaign from './pages/CreateCampaign';
-import CampaignDetails from './pages/CampaignDetails';
-import Training from './pages/Training';
-import Users from './pages/Users';
-import Leaderboard from './pages/Leaderboard';
-import Profile from './pages/Profile';
-import Settings from './pages/Settings';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { errorHandler } from './middleware/errorHandler.js';
+import { requestLogger } from './middleware/requestLogger.js';
+import authRoutes from './routes/auth.js';
+import userRoutes from './routes/users.js';
+import campaignRoutes from './routes/campaigns.js';
+import trackingRoutes from './routes/tracking.js';
+import trainingRoutes from './routes/training.js';
+import aiRoutes from './routes/ai.js';
+import dashboardRoutes from './routes/dashboard.js';
+import settingsRoutes from './routes/settings.js';
+import templateRoutes from './routes/templates.js';
+import quizRoutes from './routes/quiz.js';
+import gamificationRoutes from './routes/gamification.js';
+import notificationRoutes from './routes/notifications.js';
 
-const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const token = localStorage.getItem('token');
-  return token ? <>{children}</> : <Navigate to="/login" />;
-};
+export const app = express();
 
-function App() {
-  return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/*"
-            element={
-              <PrivateRoute>
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<Navigate to="/dashboard" />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/campaigns" element={<Campaigns />} />
-                    <Route path="/campaigns/create" element={<CreateCampaign />} />
-                    <Route path="/campaigns/:id" element={<CampaignDetails />} />
-                    <Route path="/training" element={<Training />} />
-                    <Route path="/users" element={<Users />} />
-                    <Route path="/leaderboard" element={<Leaderboard />} />
-                    <Route path="/profile/:userId" element={<Profile />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
-                </Layout>
-              </PrivateRoute>
-            }
-          />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  );
-}
+app.set('trust proxy', 1);
 
-export default App;
+// Configuration CORS permissive pour le développement
+app.use(cors({
+  origin: '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(requestLogger);
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/campaigns', campaignRoutes);
+app.use('/api/track', trackingRoutes);
+app.use('/api/training', trainingRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/quiz', quizRoutes);
+app.use('/api/gamification', gamificationRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+app.use(errorHandler);
+
+export default app;
