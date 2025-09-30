@@ -146,12 +146,12 @@ model TrainingProgress {
 }
 
 model Quiz {
-  id        String   @id @default(uuid())
-  moduleId  String
-  title     String
-  questions Json
-  passingScore Int   @default(70)
-  createdAt DateTime @default(now())
+  id           String   @id @default(uuid())
+  moduleId     String
+  title        String
+  questions    Json
+  passingScore Int      @default(70)
+  createdAt    DateTime @default(now())
 
   module   TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   attempts QuizAttempt[]
