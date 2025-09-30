@@ -1,11 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
 import {
-  BarChart3,
-  TrendingUp,
   Users,
   Mail,
-  AlertTriangle,
   CheckCircle,
   Trophy,
   Target,
@@ -15,9 +12,6 @@ import {
   Bar,
   LineChart,
   Line,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -70,8 +64,6 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-
   return (
     <div>
       <div className="mb-8">
@@ -79,7 +71,6 @@ const Dashboard: React.FC = () => {
         <p className="text-gray-600 mt-2">Vue d'ensemble de vos campagnes de sensibilisation</p>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
@@ -116,7 +107,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Taux de Clic</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">
-                {stats?.clickRate.toFixed(1) || 0}%
+                {stats?.clickRate?.toFixed(1) || 0}%
               </p>
             </div>
             <div className="p-3 bg-yellow-100 rounded-lg">
@@ -124,7 +115,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <p className="text-sm text-gray-500 mt-4">
-            {stats?.clickRate > 30 ? 'À améliorer' : 'Bon résultat'}
+            {(stats?.clickRate || 0) > 30 ? 'À améliorer' : 'Bon résultat'}
           </p>
         </div>
 
@@ -133,7 +124,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Taux de Signalement</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">
-                {stats?.reportRate.toFixed(1) || 0}%
+                {stats?.reportRate?.toFixed(1) || 0}%
               </p>
             </div>
             <div className="p-3 bg-green-100 rounded-lg">
@@ -147,7 +138,6 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Trend Chart */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Évolution des Performances</h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -163,7 +153,6 @@ const Dashboard: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Department Stats */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Performance par Département</h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -181,7 +170,6 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Campaigns */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Campagnes Récentes</h3>
           <div className="space-y-4">
@@ -211,7 +199,6 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Leaderboard */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">Top Performers</h3>

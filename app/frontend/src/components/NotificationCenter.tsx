@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
-import { Bell, X, Check, AlertCircle, Trophy, TrendingUp } from 'lucide-react';
+import { Bell, Check, AlertCircle, Trophy, TrendingUp } from 'lucide-react';
 
 interface Notification {
   id: string;
@@ -19,7 +19,7 @@ const NotificationCenter: React.FC = () => {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
+    const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
 
