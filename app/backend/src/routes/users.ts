@@ -8,7 +8,6 @@ import {
   exportUsers,
   getUsersByDepartment 
 } from '../controllers/userController.js';
-import { body } from 'express-validator';
 import multer from 'multer';
 
 const router = Router();
