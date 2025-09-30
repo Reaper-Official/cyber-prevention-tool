@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Users, Target, Sparkles } from 'lucide-react';
+import { ArrowLeft, Target, Sparkles } from 'lucide-react';
 
 interface Template {
   id: string;
@@ -132,7 +132,6 @@ const CreateCampaign: React.FC = () => {
         <p className="text-gray-600 mt-2">Configurez votre campagne de sensibilisation</p>
       </div>
 
-      {/* Progress Steps */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           {[1, 2, 3].map((s) => (
@@ -161,7 +160,6 @@ const CreateCampaign: React.FC = () => {
         </div>
       </div>
 
-      {/* Step 1: Campaign Details */}
       {step === 1 && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-6">Informations de la Campagne</h3>
@@ -218,7 +216,6 @@ const CreateCampaign: React.FC = () => {
         </div>
       )}
 
-      {/* Step 2: Template Selection */}
       {step === 2 && (
         <div>
           <div className="mb-6 flex items-center justify-between">
@@ -303,7 +300,6 @@ const CreateCampaign: React.FC = () => {
         </div>
       )}
 
-      {/* Step 3: Target Selection */}
       {step === 3 && (
         <div>
           <div className="mb-6 flex items-center justify-between">

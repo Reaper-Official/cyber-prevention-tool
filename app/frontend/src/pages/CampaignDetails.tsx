@@ -10,20 +10,13 @@ import {
   CheckCircle,
   Download,
   Play,
-  Pause,
 } from 'lucide-react';
 import {
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
   ResponsiveContainer,
+  Tooltip,
 } from 'recharts';
 
 interface Campaign {
@@ -117,8 +110,6 @@ const CampaignDetails: React.FC = () => {
     return <div>Campagne non trouvée</div>;
   }
 
-  const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#6b7280'];
-
   const pieData = [
     { name: 'Signalés', value: stats.reported, color: '#10b981' },
     { name: 'Cliqués', value: stats.clicked - stats.reported, color: '#ef4444' },
@@ -163,7 +154,6 @@ const CampaignDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
@@ -209,7 +199,6 @@ const CampaignDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Alerts */}
       {stats.alerts.length > 0 && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-8">
           <div className="flex items-start">
@@ -227,7 +216,6 @@ const CampaignDetails: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pie Chart */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Répartition des Réponses</h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -251,7 +239,6 @@ const CampaignDetails: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Reading Metrics */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Métriques de Lecture</h3>
           <div className="space-y-4">

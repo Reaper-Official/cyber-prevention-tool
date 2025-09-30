@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
-import { Trophy, Medal, Award, TrendingUp, Users, Filter } from 'lucide-react';
+import { Trophy, Medal, Award } from 'lucide-react';
 
 interface LeaderboardUser {
   id: string;
@@ -14,7 +14,6 @@ interface LeaderboardUser {
 
 const Leaderboard: React.FC = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
-  const [filter, setFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,10 +60,8 @@ const Leaderboard: React.FC = () => {
         <p className="text-gray-600 mt-2">Les champions de la cybersécurité</p>
       </div>
 
-      {/* Podium */}
       <div className="mb-12">
         <div className="flex items-end justify-center space-x-4">
-          {/* Second Place */}
           {leaderboard[1] && (
             <div className="flex flex-col items-center">
               <div className="w-24 h-24 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center text-3xl font-bold text-gray-700 mb-2">
@@ -79,7 +76,6 @@ const Leaderboard: React.FC = () => {
             </div>
           )}
 
-          {/* First Place */}
           {leaderboard[0] && (
             <div className="flex flex-col items-center -mt-8">
               <div className="w-32 h-32 bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-full flex items-center justify-center text-4xl font-bold text-white mb-2 shadow-lg">
@@ -94,7 +90,6 @@ const Leaderboard: React.FC = () => {
             </div>
           )}
 
-          {/* Third Place */}
           {leaderboard[2] && (
             <div className="flex flex-col items-center">
               <div className="w-24 h-24 bg-gradient-to-br from-orange-300 to-orange-400 rounded-full flex items-center justify-center text-3xl font-bold text-white mb-2">
@@ -111,29 +106,16 @@ const Leaderboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Leaderboard Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Rang
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Utilisateur
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Département
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Niveau
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Badges
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Points
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rang</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Utilisateur</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Département</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Niveau</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Badges</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Points</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">

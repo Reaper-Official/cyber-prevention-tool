@@ -3,13 +3,7 @@ import { api } from '@/services/api';
 import { useParams } from 'react-router-dom';
 import {
   Trophy,
-  Star,
-  TrendingUp,
-  Award,
-  Calendar,
   CheckCircle,
-  Target,
-  Zap,
 } from 'lucide-react';
 import {
   RadarChart,
@@ -101,7 +95,6 @@ const Profile: React.FC = () => {
         <p className="text-gray-600 mt-2">Vue d'ensemble de vos performances</p>
       </div>
 
-      {/* Header Card */}
       <div className="bg-gradient-to-r from-primary-600 to-blue-600 rounded-lg shadow-lg p-8 mb-8 text-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-6">
@@ -135,7 +128,6 @@ const Profile: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Badges */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold text-gray-900">Badges Débloqués</h3>
@@ -165,7 +157,6 @@ const Profile: React.FC = () => {
           </div>
         </div>
 
-        {/* Level Progress */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Progression Niveau</h3>
           <div className="text-center mb-6">
@@ -223,7 +214,6 @@ const Profile: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Skills Radar */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Compétences</h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -243,7 +233,6 @@ const Profile: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Quiz Progress */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Progression Quiz</h3>
           {progressData.length > 0 ? (
@@ -265,7 +254,6 @@ const Profile: React.FC = () => {
         </div>
       </div>
 
-      {/* Training Progress */}
       <div className="mt-8 bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4">Progression des Formations</h3>
         <div className="space-y-4">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
-import { Plus, Calendar, Users, Eye, MousePointer, AlertTriangle } from 'lucide-react';
+import { Plus, Calendar, Users, Eye, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Campaign {
@@ -80,7 +80,6 @@ const Campaigns: React.FC = () => {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="mb-6 flex space-x-2">
         {['ALL', 'DRAFT', 'ACTIVE', 'COMPLETED'].map((status) => (
           <button
@@ -97,7 +96,6 @@ const Campaigns: React.FC = () => {
         ))}
       </div>
 
-      {/* Campaigns Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredCampaigns.map((campaign) => (
           <div
