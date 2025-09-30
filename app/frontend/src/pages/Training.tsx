@@ -26,19 +26,19 @@ const Training: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: number;
     
     if (selectedModule && !selectedModule.completed) {
       const detector = new ReadingDetector(0.25);
       setReadingDetector(detector);
       
-      interval = setInterval(() => {
+      interval = window.setInterval(() => {
         setReadingTime((prev) => prev + 1);
       }, 1000);
     }
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (interval) window.clearInterval(interval);
       if (readingDetector) readingDetector.cleanup();
     };
   }, [selectedModule]);
@@ -183,10 +183,6 @@ const Training: React.FC = () => {
             <div 
               className="prose max-w-none training-content"
               dangerouslySetInnerHTML={{ __html: selectedModule.content }}
-              style={{
-                lineHeight: '1.8',
-                fontSize: '1.1rem',
-              }}
             />
           </div>
 
@@ -232,97 +228,6 @@ const Training: React.FC = () => {
           </div>
         </div>
       )}
-
-      <style>{`
-        .training-content h2 {
-          font-size: 1.75rem;
-          font-weight: 700;
-          margin-top: 2rem;
-          margin-bottom: 1rem;
-          color: #1f2937;
-        }
-
-        .training-content h3 {
-          font-size: 1.5rem;
-          font-weight: 600;
-          margin-top: 1.5rem;
-          margin-bottom: 0.75rem;
-          color: #374151;
-        }
-
-        .training-content h4 {
-          font-size: 1.25rem;
-          font-weight: 600;
-          margin-top: 1rem;
-          margin-bottom: 0.5rem;
-          color: #4b5563;
-        }
-
-        .training-content .alert {
-          padding: 1rem;
-          border-radius: 0.5rem;
-          margin: 1.5rem 0;
-        }
-
-        .training-content .alert-warning {
-          background-color: #fef3c7;
-          border-left: 4px solid #f59e0b;
-        }
-
-        .training-content .alert-danger {
-          background-color: #fee2e2;
-          border-left: 4px solid #ef4444;
-        }
-
-        .training-content .checklist,
-        .training-content .never-share,
-        .training-content .password-rules ul {
-          list-style: none;
-          padding-left: 0;
-        }
-
-        .training-content .checklist li,
-        .training-content .never-share li {
-          padding: 0.75rem;
-          margin: 0.5rem 0;
-          background: #f9fafb;
-          border-left: 4px solid #0ea5e9;
-          border-radius: 0.25rem;
-        }
-
-        .training-content .example-box,
-        .training-content .scenario-box,
-        .training-content .practice-box {
-          background: #f0f9ff;
-          border: 1px solid #0ea5e9;
-          border-radius: 0.5rem;
-          padding: 1.5rem;
-          margin: 1.5rem 0;
-        }
-
-        .training-content .remember-box,
-        .training-content .pro-tip {
-          background: #ecfdf5;
-          border: 2px solid #10b981;
-          border-radius: 0.5rem;
-          padding: 1.5rem;
-          margin: 1.5rem 0;
-        }
-
-        .training-content code {
-          background: #f3f4f6;
-          padding: 0.25rem 0.5rem;
-          border-radius: 0.25rem;
-          font-family: 'Courier New', monospace;
-        }
-
-        .training-content .answer {
-          background: #d1fae5;
-          padding: 1rem;
-          border-radius: 0.5rem;
-          margin-top: 1rem;
-        }
-      `}</style>
     </div>
   );
 };
