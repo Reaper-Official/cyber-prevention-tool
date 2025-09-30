@@ -1,20 +1,17 @@
 # Arrêtez tout
 docker compose down
 
-# Supprimez les volumes pour repartir de zéro
+# Supprimez le volume de la base de données
 docker volume rm app_postgres_data
 
-# Relancez avec le nouveau schéma
-docker compose up -d db redis mailhog
+# Redémarrez
+docker compose up -d
 
-# Attendez 10 secondes
-sleep 10
+# Attendez 20 secondes
+sleep 20
 
-# Appliquez le nouveau schéma
-cd backend
-npx prisma db push
-npx prisma generate
-cd ..
+# Forcez l'application du schéma
+docker compose exec backend npx prisma db push --accept-data-loss
 
-# Relancez tout
-docker compose up -d --build
+# Seedez
+docker compose exec backend npm run prisma:seed
