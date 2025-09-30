@@ -107,7 +107,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Taux de Clic</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">
-                {stats?.clickRate?.toFixed(1) || 0}%
+                {(stats?.clickRate || 0).toFixed(1)}%
               </p>
             </div>
             <div className="p-3 bg-yellow-100 rounded-lg">
@@ -124,7 +124,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Taux de Signalement</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">
-                {stats?.reportRate?.toFixed(1) || 0}%
+                {(stats?.reportRate || 0).toFixed(1)}%
               </p>
             </div>
             <div className="p-3 bg-green-100 rounded-lg">
