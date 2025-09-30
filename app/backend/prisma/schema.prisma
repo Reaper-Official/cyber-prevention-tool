@@ -14,6 +14,10 @@ model User {
   name       String
   role       String   @default("EMPLOYEE")
   department String?
+  points     Int      @default(0)
+  level      Int      @default(1)
+  badges     String[] @default([])
+  avatar     String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -21,65 +25,105 @@ model User {
   campaignsValidated  Campaign[]        @relation("CampaignValidator")
   auditLogs           AuditLog[]
   trainingProgress    TrainingProgress[]
+  quizAttempts        QuizAttempt[]
+  notifications       Notification[]
+  reports             Report[]
 
   @@index([email])
   @@index([role])
   @@index([department])
+  @@index([points])
 }
 
 model Campaign {
-  id          String    @id @default(uuid())
-  name        String
-  subject     String
-  body        String    @db.Text
-  status      String    @default("DRAFT")
-  sandboxMode Boolean   @default(true)
+  id                String    @id @default(uuid())
+  name              String
+  subject           String
+  body              String    @db.Text
+  status            String    @default("DRAFT")
+  sandboxMode       Boolean   @default(true)
   targetDepartments String[]
-  createdAt   DateTime  @default(now())
-  publishedAt DateTime?
-  validatedAt DateTime?
-  createdById String
-  validatedById String?
+  templateId        String?
+  scheduledFor      DateTime?
+  createdAt         DateTime  @default(now())
+  publishedAt       DateTime?
+  validatedAt       DateTime?
+  completedAt       DateTime?
+  createdById       String
+  validatedById     String?
   
-  createdBy   User   @relation("CampaignCreator", fields: [createdById], references: [id])
-  validatedBy User?  @relation("CampaignValidator", fields: [validatedById], references: [id])
+  createdBy   User              @relation("CampaignCreator", fields: [createdById], references: [id])
+  validatedBy User?             @relation("CampaignValidator", fields: [validatedById], references: [id])
   targets     CampaignTarget[]
+  template    EmailTemplate?    @relation(fields: [templateId], references: [id])
+  reports     Report[]
 
   @@index([status])
   @@index([createdAt])
+  @@index([templateId])
 }
 
 model CampaignTarget {
   id             String    @id @default(uuid())
   campaignId     String
   email          String
+  userId         String?
   status         String    @default("PENDING")
   openedAt       DateTime?
   clickedAt      DateTime?
   reportedAt     DateTime?
+  submittedData  Json?
   readingMetrics Json?
+  ipAddress      String?
+  userAgent      String?
   createdAt      DateTime  @default(now())
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
   @@index([status])
+  @@index([userId])
 }
 
-model TrainingModule {
+model EmailTemplate {
   id          String   @id @default(uuid())
-  title       String
+  name        String
+  category    String
+  difficulty  String
+  subject     String
+  body        String   @db.Text
   description String
-  content     String   @db.Text
-  duration    Int
-  order       Int      @default(0)
-  minReadingTime Int   @default(0)
+  indicators  String[]
+  active      Boolean  @default(true)
+  usageCount  Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  campaigns Campaign[]
+
+  @@index([category])
+  @@index([active])
+}
+
+model TrainingModule {
+  id             String   @id @default(uuid())
+  title          String
+  description    String
+  content        String   @db.Text
+  duration       Int
+  order          Int      @default(0)
+  minReadingTime Int      @default(0)
+  category       String
+  difficulty     String   @default("BEGINNER")
+  points         Int      @default(10)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
   progress TrainingProgress[]
+  quizzes  Quiz[]
 
   @@index([order])
+  @@index([category])
 }
 
 model TrainingProgress {
@@ -90,6 +134,7 @@ model TrainingProgress {
   completedAt DateTime?
   readingTime Int       @default(0)
   fastRead    Boolean   @default(false)
+  score       Int?
   createdAt   DateTime  @default(now())
 
   user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -97,6 +142,72 @@ model TrainingProgress {
 
   @@unique([userId, moduleId])
   @@index([userId])
+  @@index([completed])
+}
+
+model Quiz {
+  id        String   @id @default(uuid())
+  moduleId  String
+  title     String
+  questions Json
+  passingScore Int   @default(70)
+  createdAt DateTime @default(now())
+
+  module   TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  attempts QuizAttempt[]
+
+  @@index([moduleId])
+}
+
+model QuizAttempt {
+  id          String   @id @default(uuid())
+  userId      String
+  quizId      String
+  answers     Json
+  score       Int
+  passed      Boolean
+  completedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([quizId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  read      Boolean  @default(false)
+  actionUrl String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  campaignId  String?
+  userId      String
+  type        String
+  title       String
+  data        Json
+  generatedAt DateTime @default(now())
+  format      String   @default("PDF")
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([userId])
+  @@index([type])
 }
 
 model AuditLog {
@@ -104,6 +215,7 @@ model AuditLog {
   userId    String
   action    String
   details   Json?
+  ipAddress String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -125,6 +237,11 @@ model Settings {
   smtpUser          String?
   smtpPassword      String?
   smtpFrom          String   @default("noreply@phishguard.local")
+  companyName       String   @default("PhishGuard")
+  companyLogo       String?
+  primaryColor      String   @default("#0ea5e9")
+  pointsPerReport   Int      @default(50)
+  pointsPerTraining Int      @default(10)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
