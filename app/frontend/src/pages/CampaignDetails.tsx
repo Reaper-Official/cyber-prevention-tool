@@ -1,102 +1,107 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
 import { api } from '@/services/api';
-import { Download, CheckCircle, XCircle } from 'lucide-react';
-import { format } from 'date-fns';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Mail,
+  Eye,
+  MousePointer,
+  AlertTriangle,
+  CheckCircle,
+  Download,
+  Play,
+  Pause,
+} from 'lucide-react';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
-interface CampaignDetails {
+interface Campaign {
   id: string;
   name: string;
-  subject: string;
-  body: string;
   status: string;
   sandboxMode: boolean;
   createdAt: string;
-  report: {
-    totalTargets: number;
-    delivered: number;
-    opened: number;
-    clicked: number;
-    reported: number;
-    clickRate: number;
-    openRate: number;
-    fastReadRate: number;
-    avgReadingTime: number;
-    alerts: string[];
-  };
-  targets: Array<{
-    id: string;
-    email: string;
-    status: string;
-    openedAt?: string;
-    clickedAt?: string;
-    readingMetrics?: any;
-  }>;
+  publishedAt: string | null;
+  targetDepartments: string[];
+}
+
+interface Stats {
+  totalTargets: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  reported: number;
+  openRate: number;
+  clickRate: number;
+  reportRate: number;
+  fastReadRate: number;
+  avgReadingTime: number;
+  alerts: string[];
 }
 
 const CampaignDetails: React.FC = () => {
-  const { id } = useParams();
-  const [campaign, setCampaign] = useState<CampaignDetails | null>(null);
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (id) {
-      fetchCampaign();
-    }
+    fetchCampaignDetails();
   }, [id]);
 
-  const fetchCampaign = async () => {
+  const fetchCampaignDetails = async () => {
     try {
-      const response = await api.get(`/campaigns/${id}`);
-      setCampaign(response.data);
+      const [campaignRes, statsRes] = await Promise.all([
+        api.get(`/campaigns/${id}`),
+        api.get(`/campaigns/${id}/stats`),
+      ]);
+      setCampaign(campaignRes.data);
+      setStats(statsRes.data);
     } catch (error) {
-      console.error('Failed to fetch campaign:', error);
+      console.error('Failed to fetch campaign details:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleExport = async (format: 'csv' | 'pdf') => {
+  const handleExportReport = async () => {
     try {
-      const response = await api.get(`/reports/campaign/${id}/export?format=${format}`, {
+      const response = await api.get(`/campaigns/${id}/report/export`, {
         responseType: 'blob',
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `campaign_${id}_report.${format}`);
+      link.setAttribute('download', `campaign_${id}_report.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
     } catch (error) {
-      console.error('Export failed:', error);
-    }
-  };
-
-  const handleApprove = async () => {
-    try {
-      await api.post(`/campaigns/${id}/validate`);
-      fetchCampaign();
-    } catch (error) {
-      console.error('Approval failed:', error);
+      console.error('Failed to export report:', error);
     }
   };
 
   const handlePublish = async () => {
-    if (
-      !campaign?.sandboxMode &&
-      !confirm(
-        'Attention: Cette action enverra des emails réels. Avez-vous obtenu l\'approbation RH/Sécurité?'
-      )
-    ) {
-      return;
-    }
-
+    if (!confirm('Êtes-vous sûr de vouloir lancer cette campagne?')) return;
+    
     try {
       await api.post(`/campaigns/${id}/publish`);
-      fetchCampaign();
+      fetchCampaignDetails();
     } catch (error) {
-      console.error('Publish failed:', error);
+      console.error('Failed to publish campaign:', error);
+      alert('Erreur lors du lancement de la campagne');
     }
   };
 
@@ -108,176 +113,195 @@ const CampaignDetails: React.FC = () => {
     );
   }
 
-  if (!campaign) {
+  if (!campaign || !stats) {
     return <div>Campagne non trouvée</div>;
   }
 
+  const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#6b7280'];
+
+  const pieData = [
+    { name: 'Signalés', value: stats.reported, color: '#10b981' },
+    { name: 'Cliqués', value: stats.clicked - stats.reported, color: '#ef4444' },
+    { name: 'Ouverts', value: stats.opened - stats.clicked, color: '#f59e0b' },
+    { name: 'Non ouverts', value: stats.delivered - stats.opened, color: '#6b7280' },
+  ];
+
   return (
     <div>
+      <button
+        onClick={() => navigate('/campaigns')}
+        className="flex items-center text-primary-600 hover:text-primary-700 mb-6"
+      >
+        <ArrowLeft className="h-5 w-5 mr-2" />
+        Retour aux campagnes
+      </button>
+
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">{campaign.name}</h1>
           <p className="text-gray-600 mt-2">
-            Créée le {format(new Date(campaign.createdAt), 'dd/MM/yyyy HH:mm')}
+            Créée le {new Date(campaign.createdAt).toLocaleDateString('fr-FR')}
           </p>
         </div>
         <div className="flex space-x-3">
           <button
-            onClick={() => handleExport('csv')}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            onClick={handleExportReport}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <Download className="h-5 w-5 mr-2" />
-            Export CSV
+            Exporter PDF
           </button>
-          <button
-            onClick={() => handleExport('pdf')}
-            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            <Download className="h-5 w-5 mr-2" />
-            Export PDF
-          </button>
-        </div>
-      </div>
-
-      {campaign.status === 'PENDING_APPROVAL' && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-yellow-700">
-              Cette campagne nécessite une approbation avant publication.
-            </p>
-            <button
-              onClick={handleApprove}
-              className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
-            >
-              Approuver
-            </button>
-          </div>
-        </div>
-      )}
-
-      {campaign.status === 'APPROVED' && (
-        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-green-700">
-              Campagne approuvée. Prête à être publiée.
-              {campaign.sandboxMode && ' (Mode sandbox activé)'}
-            </p>
+          {campaign.status === 'DRAFT' && (
             <button
               onClick={handlePublish}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
-              Publier
+              <Play className="h-5 w-5 mr-2" />
+              Lancer
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Emails Envoyés</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.delivered}</p>
+            </div>
+            <Mail className="h-10 w-10 text-blue-500" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Taux d'Ouverture</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.openRate.toFixed(1)}%</p>
+            </div>
+            <Eye className="h-10 w-10 text-yellow-500" />
+          </div>
+          <p className="text-sm text-gray-500 mt-2">{stats.opened} ouverts</p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Taux de Clic</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.clickRate.toFixed(1)}%</p>
+            </div>
+            <MousePointer className="h-10 w-10 text-red-500" />
+          </div>
+          <p className="text-sm text-gray-500 mt-2">{stats.clicked} clics</p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Signalements</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.reported}</p>
+            </div>
+            <CheckCircle className="h-10 w-10 text-green-500" />
+          </div>
+          <p className="text-sm text-green-600 mt-2">{stats.reportRate.toFixed(1)}%</p>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {stats.alerts.length > 0 && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-8">
+          <div className="flex items-start">
+            <AlertTriangle className="h-6 w-6 text-red-500 mr-3 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-medium text-red-800">Alertes de Sécurité</h3>
+              <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
+                {stats.alerts.map((alert, idx) => (
+                  <li key={idx}>{alert}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       )}
 
-      {campaign.report.alerts.length > 0 && (
-        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
-          <p className="text-sm font-medium text-red-700 mb-2">Alertes:</p>
-          <ul className="list-disc list-inside text-sm text-red-600">
-            {campaign.report.alerts.map((alert, idx) => (
-              <li key={idx}>{alert}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Taux d'ouverture</p>
-          <p className="text-2xl font-bold text-gray-900">{campaign.report.openRate.toFixed(1)}%</p>
-          <p className="text-xs text-gray-500 mt-2">
-            {campaign.report.opened} / {campaign.report.totalTargets}
-          </p>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Taux de clic</p>
-          <p className="text-2xl font-bold text-gray-900">{campaign.report.clickRate.toFixed(1)}%</p>
-          <p className="text-xs text-gray-500 mt-2">
-            {campaign.report.clicked} / {campaign.report.totalTargets}
-          </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Pie Chart */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Répartition des Réponses</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Lecture rapide</p>
-          <p className="text-2xl font-bold text-red-600">
-            {campaign.report.fastReadRate.toFixed(1)}%
-          </p>
-          <p className="text-xs text-gray-500 mt-2">Formation recommandée</p>
-        </div>
+        {/* Reading Metrics */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Métriques de Lecture</h3>
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-600">Temps moyen de lecture</span>
+                <span className="text-lg font-bold text-gray-900">{stats.avgReadingTime.toFixed(0)}s</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full"
+                  style={{ width: `${Math.min((stats.avgReadingTime / 300) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
 
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Temps de lecture moyen</p>
-          <p className="text-2xl font-bold text-gray-900">
-            {campaign.report.avgReadingTime.toFixed(0)}s
-          </p>
-          <p className="text-xs text-gray-500 mt-2">Par utilisateur</p>
-        </div>
-      </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-600">Lecture rapide (suspect)</span>
+                <span className="text-lg font-bold text-gray-900">{stats.fastReadRate.toFixed(1)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full ${
+                    stats.fastReadRate > 50 ? 'bg-red-600' : 'bg-yellow-600'
+                  }`}
+                  style={{ width: `${stats.fastReadRate}%` }}
+                />
+              </div>
+            </div>
+          </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">Cibles</h2>
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h4 className="text-sm font-medium text-gray-900 mb-2">Recommandations</h4>
+            <ul className="text-sm text-gray-600 space-y-1">
+              {stats.clickRate > 30 && (
+                <li>• Formation renforcée recommandée</li>
+              )}
+              {stats.fastReadRate > 50 && (
+                <li>• Sessions de sensibilisation obligatoires</li>
+              )}
+              {stats.reportRate < 10 && (
+                <li>• Améliorer les procédures de signalement</li>
+              )}
+              {stats.clickRate < 10 && (
+                <li>• Excellent niveau de vigilance!</li>
+              )}
+            </ul>
+          </div>
         </div>
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Statut
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Ouvert
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Cliqué
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Temps lecture
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {campaign.targets.map((target) => (
-              <tr key={target.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {target.email}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-                    {target.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {target.openedAt ? (
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-gray-300" />
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {target.clickedAt ? (
-                    <CheckCircle className="h-5 w-5 text-red-600" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-gray-300" />
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {target.readingMetrics?.timeSpent
-                    ? `${target.readingMetrics.timeSpent.toFixed(0)}s`
-                    : '-'}
-                  {target.readingMetrics?.fastRead && (
-                    <span className="ml-2 text-red-600 text-xs">(rapide)</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );
