@@ -1,4 +1,3 @@
-cat > backend/prisma/seed.ts << 'EOF'
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { emailTemplates } from './templates-seed.js';
@@ -104,4 +103,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-EOF
