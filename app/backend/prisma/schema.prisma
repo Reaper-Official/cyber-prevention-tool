@@ -245,3 +245,20 @@ model Settings {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
+model TrainingProgress {
+  id            String   @id @default(uuid())
+  userId        String
+  moduleId      String
+  completed     Boolean  @default(false)
+  completedAt   DateTime?
+  readingTime   Int?     // Temps réel de lecture en secondes
+  readingSpeed  Int?     // Mots par minute
+  needsFollowUp Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module TrainingModule  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId])
+}
