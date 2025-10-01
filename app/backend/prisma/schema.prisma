@@ -171,7 +171,7 @@ model TrainingProgress {
   completedAt   DateTime?
   score         Int?
   readingTime   Int?
-  readingSpeed  Int?
+  readingSpeed  Int?            // Ajout de ce champ
   needsFollowUp Boolean         @default(false)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
