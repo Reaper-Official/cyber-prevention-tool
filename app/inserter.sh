@@ -1,1 +1,2 @@
-sed -i '/import { validationResult }/d' backend/src/controllers/campaignController.ts
+sed -i 's/stats?.clickRate.toFixed/(stats?.clickRate || 0).toFixed/g' frontend/src/pages/Dashboard.tsx
+sed -i 's/stats?.reportRate.toFixed/(stats?.reportRate || 0).toFixed/g' frontend/src/pages/Dashboard.tsx

@@ -1,5 +1,4 @@
 import { Response } from 'express';
-import { validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { CampaignService } from '../services/campaignService.js';
