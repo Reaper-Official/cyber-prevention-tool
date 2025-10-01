@@ -1,2 +1,5 @@
-sed -i 's/stats?.clickRate.toFixed/(stats?.clickRate || 0).toFixed/g' frontend/src/pages/Dashboard.tsx
-sed -i 's/stats?.reportRate.toFixed/(stats?.reportRate || 0).toFixed/g' frontend/src/pages/Dashboard.tsx
+# Renommez le fichier
+mv backend/prisma/training-modules.js backend/prisma/training-modules.ts
+
+# Modifiez l'import dans seed.ts
+sed -i "s/from '.\/training-modules.js'/from '.\/training-modules'/" backend/prisma/seed.ts
