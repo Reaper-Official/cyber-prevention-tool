@@ -1,97 +1,86 @@
-export interface ReadingMetrics {
-  openedAt: number;
-  closedAt?: number;
-  timeSpent: number;
-  visibleWords: number;
-  secondsPerWord: number;
-  fastRead: boolean;
-  scrollEvents: number;
-  focusTime: number;
-  blurTime: number;
-}
-
-export class ReadingDetector {
-  private openedAt: number;
-  private focusStartTime: number | null = null;
-  private totalFocusTime = 0;
-  private totalBlurTime = 0;
-  private scrollEvents = 0;
-  private minSecondsPerWord: number;
-  private active = true;
-
-  constructor(minSecondsPerWord = 0.25) {
-    this.openedAt = Date.now();
-    this.minSecondsPerWord = minSecondsPerWord;
-    this.setupListeners();
+export class ReadingTracker {
+  private startTime: number;
+  private focusTime: number = 0;
+  private lastFocusStart: number = 0;
+  private scrollEvents: number = 0;
+  private minWordsPerMinute: number = 150; // Lecture minimale acceptable
+  private maxWordsPerMinute: number = 400; // Lecture maximale réaliste
+  
+  constructor(private wordCount: number) {
+    this.startTime = Date.now();
+    this.lastFocusStart = Date.now();
+    this.setupTracking();
   }
 
-  private setupListeners() {
-    window.addEventListener('focus', this.handleFocus);
-    window.addEventListener('blur', this.handleBlur);
-    window.addEventListener('scroll', this.handleScroll);
-    window.addEventListener('beforeunload', this.handleUnload);
-    this.handleFocus();
+  private setupTracking() {
+    // Détection du focus/blur de la fenêtre
+    window.addEventListener('focus', () => {
+      this.lastFocusStart = Date.now();
+    });
+
+    window.addEventListener('blur', () => {
+      if (this.lastFocusStart > 0) {
+        this.focusTime += Date.now() - this.lastFocusStart;
+        this.lastFocusStart = 0;
+      }
+    });
+
+    // Détection du scroll (interaction)
+    let scrollTimeout: NodeJS.Timeout;
+    window.addEventListener('scroll', () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        this.scrollEvents++;
+      }, 150);
+    });
+
+    // Détection de la visibilité de la page
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.lastFocusStart > 0) {
+        this.focusTime += Date.now() - this.lastFocusStart;
+        this.lastFocusStart = 0;
+      } else if (!document.hidden) {
+        this.lastFocusStart = Date.now();
+      }
+    });
   }
 
-  private handleFocus = () => {
-    if (this.active) {
-      this.focusStartTime = Date.now();
+  getReadingStats() {
+    // Temps total passé sur la page
+    const totalTime = (Date.now() - this.startTime) / 1000; // en secondes
+    
+    // Temps réel de focus (fenêtre active)
+    let activeFocusTime = this.focusTime;
+    if (this.lastFocusStart > 0) {
+      activeFocusTime += Date.now() - this.lastFocusStart;
     }
-  };
+    const focusTimeSeconds = activeFocusTime / 1000;
 
-  private handleBlur = () => {
-    if (this.focusStartTime && this.active) {
-      this.totalFocusTime += Date.now() - this.focusStartTime;
-      this.focusStartTime = null;
-    }
-  };
+    // Calcul de la vitesse de lecture
+    const wordsPerMinute = (this.wordCount / focusTimeSeconds) * 60;
 
-  private handleScroll = () => {
-    if (this.active) {
-      this.scrollEvents++;
-    }
-  };
+    // Détermination si la lecture est suspecte
+    const isTooFast = wordsPerMinute > this.maxWordsPerMinute;
+    const isTooSlow = wordsPerMinute < this.minWordsPerMinute && totalTime < 60;
+    const hasMinimalInteraction = this.scrollEvents < 3;
 
-  private handleUnload = () => {
-    this.cleanup();
-  };
-
-  private countVisibleWords(): number {
-    const bodyText = document.body.innerText || '';
-    const words = bodyText.trim().split(/\s+/);
-    return words.filter((w) => w.length > 0).length;
-  }
-
-  public getMetrics(): ReadingMetrics {
-    const now = Date.now();
-    if (this.focusStartTime) {
-      this.totalFocusTime += now - this.focusStartTime;
-      this.focusStartTime = now;
-    }
-
-    const timeSpent = (now - this.openedAt) / 1000;
-    const visibleWords = this.countVisibleWords();
-    const secondsPerWord = visibleWords > 0 ? timeSpent / visibleWords : 0;
-    const fastRead = secondsPerWord < this.minSecondsPerWord && visibleWords > 50;
+    const suspicious = isTooFast || (isTooSlow && hasMinimalInteraction);
 
     return {
-      openedAt: this.openedAt,
-      closedAt: now,
-      timeSpent,
-      visibleWords,
-      secondsPerWord,
-      fastRead,
+      totalTimeSeconds: Math.round(totalTime),
+      focusTimeSeconds: Math.round(focusTimeSeconds),
+      wordsPerMinute: Math.round(wordsPerMinute),
       scrollEvents: this.scrollEvents,
-      focusTime: this.totalFocusTime / 1000,
-      blurTime: this.totalBlurTime / 1000,
+      suspicious,
+      reason: suspicious 
+        ? isTooFast 
+          ? 'READING_TOO_FAST' 
+          : 'INSUFFICIENT_ENGAGEMENT'
+        : null,
     };
   }
 
-  public cleanup() {
-    this.active = false;
-    window.removeEventListener('focus', this.handleFocus);
-    window.removeEventListener('blur', this.handleBlur);
-    window.removeEventListener('scroll', this.handleScroll);
-    window.removeEventListener('beforeunload', this.handleUnload);
+  destroy() {
+    // Cleanup des event listeners si nécessaire
   }
 }
