@@ -1,14 +1,14 @@
-# Supprimer les conteneurs et volumes
+# Arrêter tout
 docker compose down -v
 
-# Reconstruire tout
+# Reconstruire
 docker compose up -d --build
 
 # Attendre le démarrage
 sleep 20
 
-# Créer la migration
-docker compose exec backend npx prisma migrate dev --name init
+# Créer la migration pour ajouter readingSpeed
+docker compose exec backend npx prisma migrate dev --name add_reading_speed
 
 # Seed
 docker compose exec backend npm run prisma:seed
