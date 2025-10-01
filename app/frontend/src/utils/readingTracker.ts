@@ -1,4 +1,4 @@
-export class ReadingDetector {
+export class ReadingTracker {
   private startTime: number;
   private focusTime: number = 0;
   private lastFocusStart: number = 0;
