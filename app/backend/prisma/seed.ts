@@ -5,7 +5,7 @@ import { emailTemplates } from './templates-seed.js';
 const prisma = new PrismaClient();
 
 // Import des modules depuis un fichier séparé
-import { trainingModulesData } from './training-modules.js';
+import { trainingModulesData } from './training-modules';
 
 async function main() {
   console.log('🌱 Seeding database...');
